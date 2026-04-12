@@ -1,80 +1,88 @@
-Cipher
+# Cipher
 
 A high-stakes, competitive 4-digit logic game where human intuition races against a mathematically perfect Information Theory algorithm. Built with a tactile, vintage "ledger and ink" aesthetic.
-📜 The Concept
 
-Cipher is a modern implementation of the classic "Bulls and Cows" game. Each player (and the AI) starts with a random 4-digit secret. Your goal is to decode the secret in the fewest moves possible.
+---
 
-The twist? While you are using logic and memory, the AI is calculating the Shannon Entropy of every possible move to systematically dismantle the search space of 5,040 permutations.
-🎨 Visual Identity: "Digital Vintage"
+## The Concept
+
+Cipher is a modern implementation of the classic **Bulls and Cows** game. Each player (and the AI) starts with a random 4-digit secret. Your goal is to decode the secret in the fewest moves possible.
+
+The twist? While you are using logic and memory, the AI is calculating the **Shannon Entropy** of every possible move to systematically dismantle a search space of **5,040 permutations**.
+
+---
+
+## Visual Identity: "Digital Vintage"
 
 The UI is designed to feel like a physical desk.
 
-    The Ledger: Results are displayed in a two-page open logbook.
+| Element | Description |
+|---|---|
+| **The Ledger** | Results are displayed in a two-page open logbook |
+| **The Memo Pad** | Active gameplay takes place on a wrinkled piece of memo paper held by masking tape |
+| **The Ink** | Every digit and block is rendered in a hand-drawn, watercolor-ink style |
 
-    The Memo Pad: Active gameplay takes place on a wrinkled piece of memo paper held by masking tape.
+**Feedback Blocks** (non-positional color indicators):
 
-    The Ink: Every digit and block is rendered in a hand-drawn, watercolor-ink style.
+- 🟩 **Green** — Correct digit, correct position
+- 🟨 **Yellow** — Correct digit, incorrect position
+- 🟥 **Red** — Digit not present in the code
 
-    Feedback Blocks: Non-positional color indicators:
+---
 
-        🟩 Green: Correct digit, correct position.
+## The AI: "The Entropy Agent"
 
-        🟨 Yellow: Correct digit, incorrect position.
+The core solver uses a **Minimax Algorithm** rooted in Information Theory:
 
-        🟥 Red: Digit not present in the code.
+1. **Possibility Mapping** — The AI maintains a list of all 5,040 valid permutations.
+2. **Entropy Calculation** — For every potential guess, the AI simulates all possible feedback outcomes (combinations of Green/Yellow/Red) and calculates how much each would narrow down the remaining possibilities.
+3. **Maximized Gain** — The AI selects the guess that guarantees the largest reduction in the search space, even in the worst-case scenario.
 
-🧠 The AI: "The Entropy Agent"
+---
 
-The core solver uses a Minimax Algorithm rooted in Information Theory:
+## Getting Started
 
-    Possibility Mapping: The AI maintains a list of all 5,040 valid permutations.
+### Prerequisites
 
-    Entropy Calculation: For every potential guess, the AI simulates all possible feedback outcomes (combinations of Green/Yellow/Red) and calculates how much each would narrow down the remaining possibilities.
+- Python 3.8+
+- Streamlit
 
-    Maximized Gain: The AI selects the guess that guarantees the largest reduction in the "search space," even in the worst-case scenario.
+### Installation
 
-🚀 Getting Started
-Prerequisites
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Charliecl-Lau/Cipher.git
+   cd Cipher
+   ```
 
-    Python 3.8+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-    Streamlit
+3. Run the application:
+   ```bash
+   streamlit run app.py
+   ```
 
-Installation
+---
 
-    Clone the repository:
-    Bash
+## Project Structure
 
-    git clone https://github.com/Charliecl-Lau/Cipher.git
-    cd Cipher
-
-    Install dependencies:
-    Bash
-
-    pip install -r requirements.txt
-
-    Run the application:
-    Bash
-
-    streamlit run app.py
-
-🛠 Project Structure
-Plaintext
-
+```
 Cipher/
 ├── app.py              # Main Streamlit application and UI logic
-├── cipher_engine.py     # The Minimax/Entropy AI logic
+├── cipher_engine.py    # Minimax/Entropy AI logic
 ├── image/              # Custom UI assets (parchment, paint, memo textures)
 ├── requirements.txt    # Project dependencies
 └── README.md           # You are here
+```
 
-📝 Instructions
+---
 
-    Start: Click "START GAME" to generate a secret code.
+## How to Play
 
-    Guess: Type 4 unique digits.
-
-    Submit: Press Enter or click Submit.
-
-    Compare: Once you solve the code, the AI Agent will reveal its solution path and explain the mathematical logic behind every move it made.
+1. **Start** — Click `START GAME` to generate a secret code.
+2. **Guess** — Type 4 unique digits.
+3. **Submit** — Press `Enter` or click `Submit`.
+4. **Compare** — Once you solve the code, the AI Agent reveals its full solution path and explains the mathematical logic behind every move it made.

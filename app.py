@@ -1,0 +1,375 @@
+"""
+Cipher-4 — Streamlit front-end (vintage ledger ui)
+"""
+import re
+import base64
+from pathlib import Path
+
+import streamlit as st
+
+from cipher_engine import (
+    ALL_INDICES, FIRST_GUESS,
+    generate_secret, get_feedback,
+    filter_candidates, best_guess, explain_step,
+)
+
+st.set_page_config(
+    page_title="4-Digit Guessing Game",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ── Assets ────────────────────────────────────────────────────────────────────
+def _b64(filename: str, mime: str = "image/png") -> str:
+    with open(Path(__file__).parent / "image" / filename, "rb") as f:
+        return f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
+
+TEXTURE = _b64("image_7.jpg", "image/jpeg")
+
+# ── CSS ───────────────────────────────────────────────────────────────────────
+CSS = f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {{ box-sizing: border-box; }}
+
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] {{
+    background: #3A2810 !important;
+    font-family: 'Caveat', cursive;
+    color: #1A0E08;
+}}
+
+#MainMenu, footer,
+[data-testid="stToolbar"], [data-testid="stDecoration"],
+[data-testid="stStatusWidget"], [data-testid="stHeader"],
+.stDeployButton {{ display: none !important; visibility: hidden !important; }}
+
+/* ─── Open ledger container ─── */
+[data-testid="stMainBlockContainer"] {{
+    max-width: 1120px !important;
+    margin: 2rem auto !important;
+    padding: 0 !important;
+    background-image:
+        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
+        url('{TEXTURE}');
+    background-size: 26px 26px, 26px 26px, cover;
+    background-position: top left, top left, center;
+    background-color: #EDE0B0;
+    box-shadow:
+        0 28px 65px rgba(0,0,0,0.60),
+        0 8px 20px rgba(0,0,0,0.35),
+        inset 0 0 0 1px rgba(60,40,15,0.25);
+    position: relative;
+    min-height: 660px;
+}}
+
+/* Central spine */
+[data-testid="stMainBlockContainer"]::after {{
+    content: '';
+    position: absolute;
+    top: 0; left: calc(50% - 12px);
+    width: 24px; height: 100%;
+    background: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(40,25,8,0.22) 30%,
+        rgba(40,25,8,0.35) 50%,
+        rgba(40,25,8,0.22) 70%,
+        transparent 100%
+    );
+    pointer-events: none; z-index: 50;
+}}
+
+[data-testid="stHorizontalBlock"] {{ gap: 0 !important; padding: 0 !important; align-items: stretch !important; }}
+[data-testid="stColumn"] {{ padding: 0 !important; background: transparent !important; }}
+[data-testid="stColumn"] > div:first-child {{ background: transparent !important; padding: 0 !important; min-height: 620px; }}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child > div:first-child {{ box-shadow: inset -10px 0 25px rgba(0,0,0,0.10); }}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child > div:first-child {{ box-shadow: inset 10px 0 25px rgba(0,0,0,0.07); }}
+
+/* ─── Buttons ─── */
+div[data-testid="stButton"] > button {{
+    font-family: 'Caveat', cursive !important;
+    font-size: 2.1rem !important; font-weight: 600 !important;
+    letter-spacing: 0.08em !important;
+    background: transparent !important; color: #1A0E08 !important;
+    border: 2.5px solid #1A0E08 !important;
+    padding: 0.6rem 3rem !important; border-radius: 0 !important;
+    box-shadow: none !important; cursor: pointer !important;
+    transition: background 0.08s ease, color 0.08s ease !important;
+    display: block !important; margin: 0 auto !important;
+}}
+div[data-testid="stButton"] > button:hover,
+div[data-testid="stButton"] > button:focus {{
+    background: #1A0E08 !important; color: #F5ECCC !important; outline: none !important;
+}}
+
+/* ─── YOUR PROCESS panel ─── */
+.panel-wrapper {{ max-width: 540px; margin: 1.8rem auto 0; padding: 0 1.2rem; position: relative; z-index: 60; }}
+.panel {{
+    background-image:
+        linear-gradient(rgba(80,55,20,0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.09) 1px, transparent 1px),
+        url('{TEXTURE}');
+    background-size: 26px 26px, 26px 26px, cover;
+    border: 1.5px solid rgba(75,50,18,0.60);
+    box-shadow: 6px 6px 22px rgba(0,0,0,0.32), 0 0 0 1px rgba(75,50,18,0.18);
+    padding: 1.3rem 1.5rem 1.4rem;
+    max-height: 440px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(105,70,22,0.5) transparent;
+}}
+.panel-title {{
+    font-family: 'Caveat', cursive; font-size: 2.4rem; font-weight: 700;
+    text-align: center; color: #1A0E08;
+    border-bottom: 1.5px solid rgba(75,50,18,0.40);
+    padding-bottom: 0.55rem; margin-bottom: 0.85rem; letter-spacing: 0.04em;
+}}
+
+/* ─── Guess rows ─── */
+.guess-row {{ display: flex; align-items: center; gap: 0.45rem; padding: 0.28rem 0; border-bottom: 1px solid rgba(75,50,18,0.12); font-family: 'Caveat', cursive; }}
+.guess-row:last-child {{ border-bottom: none; }}
+.guess-num {{ font-size: 1rem; font-weight: 600; color: #1A0E08; min-width: 1.5rem; }}
+.guess-digits {{ font-size: 2.2rem; font-weight: 700; color: #1A0E08; flex: 1; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1.5px; }}
+.guess-feedback {{ font-size: 1.1rem; color: #1A0E08; font-weight: 600; letter-spacing: 0.04em; }}
+.prompt-label {{ font-family: 'Caveat', cursive; font-size: 1.9rem; color: #1A0E08; margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1.5px solid rgba(75,50,18,0.30); }}
+
+/* ─── Input form ─── */
+.stForm, [data-testid="stForm"], [data-testid="stForm"] > div {{
+    background: transparent !important; background-color: transparent !important;
+    background-image: none !important; border: none !important; padding: 0 !important; box-shadow: none !important;
+}}
+[data-testid="stTextInput"] * {{
+    background: transparent !important; background-color: transparent !important;
+    background-image: none !important; border: none !important;
+    border-radius: 0 !important; box-shadow: none !important; outline: none !important;
+}}
+[data-testid="stTextInput"] input {{
+    border-bottom: 2.5px solid #2A1B0A !important;
+    font-family: 'Caveat', cursive !important; font-size: 3.2rem !important;
+    font-weight: 700 !important; letter-spacing: 0.72em !important;
+    color: #2A1B0A !important; text-align: center !important;
+    padding: 0.1rem 0.5rem !important; max-width: 300px !important;
+    display: block !important; margin: 0 auto !important;
+}}
+[data-testid="stTextInput"] input:focus {{ border-bottom-color: #10B981 !important; }}
+[data-testid="stTextInput"] input::placeholder {{ color: #8A7050 !important; letter-spacing: 0.55em !important; font-weight: 400 !important; }}
+[data-testid="stFormSubmitButton"] > button {{
+    font-family: 'Caveat', cursive !important; font-size: 1.9rem !important; font-weight: 600 !important;
+    background: transparent !important; color: #1A0E08 !important;
+    border: 2px solid rgba(75,50,18,0.55) !important; padding: 0.3rem 2rem !important;
+    border-radius: 0 !important; box-shadow: none !important; cursor: pointer !important;
+    margin-top: 0.6rem !important; display: block !important; margin-left: auto !important; margin-right: auto !important;
+    letter-spacing: 0.06em !important;
+}}
+[data-testid="stFormSubmitButton"] > button:hover,
+[data-testid="stFormSubmitButton"] > button:focus {{ background: rgba(75,50,18,0.08) !important; outline: none !important; }}
+
+.err-msg {{ font-family: 'Caveat', cursive; font-size: 1.05rem; color: #962828; margin-top: 0.25rem; }}
+
+/* ─── Page content ─── */
+.page-left-content, .page-right-content {{ padding: 2.5rem 2.2rem 2rem; min-height: 620px; position: relative; }}
+.page-title {{ font-family: 'Caveat', cursive; font-size: 1.3rem; font-weight: 700; text-align: center; color: #1A0E08; border-bottom: 2px solid #1A0E08; padding-bottom: 0.45rem; margin-bottom: 1.2rem; letter-spacing: 0.04em; }}
+.score-banner {{ font-family: 'Caveat', cursive; font-size: 2rem; font-weight: 700; color: #1A0E08; text-align: center; margin-bottom: 1.1rem; line-height: 1.3; }}
+.ai-row {{ display: flex; align-items: baseline; gap: 0.45rem; margin-bottom: 0.65rem; }}
+.ai-row-num {{ font-family: 'Caveat', cursive; font-size: 1.1rem; font-weight: 700; color: #1A0E08; min-width: 1.6rem; }}
+.ai-row-digits {{ font-family: 'Caveat', cursive; font-size: 1.75rem; font-weight: 700; color: #1A0E08; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1.5px; flex: 1; }}
+.ai-solved-txt {{ font-family: 'Caveat', cursive; font-size: 0.9rem; color: #1A0E08; font-style: italic; margin-left: 0.15rem; }}
+.explain-entry {{ font-family: 'Caveat', cursive; font-size: 1.2rem; color: #1A0E08; line-height: 1.5; margin-bottom: 0.6rem; padding-bottom: 0.45rem; border-bottom: 1px solid rgba(75,50,18,0.13); }}
+.explain-entry:last-child {{ border-bottom: none; margin-bottom: 0; }}
+.explain-entry b {{ font-weight: 700; }}
+.landing-wrap {{ display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 600px; padding: 2rem; }}
+
+@keyframes fadeUp {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+.fade-in {{ animation: fadeUp 0.65s ease; }}
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"]:empty {{ display: none; }}
+</style>
+"""
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def md_bold(text: str) -> str:
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+def feedback_text(g: int, y: int, r: int) -> str:
+    return f'<span class="guess-feedback">{g}G · {y}Y · {r}R</span>'
+
+def guess_row_html(num: int, guess: tuple, feedback: tuple) -> str:
+    g, y, r = feedback
+    digits = "-".join(str(d) for d in guess)
+    return (
+        f'<div class="guess-row">'
+        f'<span class="guess-num">{num}.</span>'
+        f'<span class="guess-digits">{digits}</span>'
+        f'{feedback_text(g, y, r)}'
+        f'</div>'
+    )
+
+# ── Session state ─────────────────────────────────────────────────────────────
+
+def init_state() -> None:
+    if "page" not in st.session_state:
+        st.session_state.page = "landing"
+
+def start_game() -> None:
+    st.session_state.secret        = generate_secret()
+    st.session_state.user_guesses  = []
+    st.session_state.ai_guesses    = []
+    st.session_state.ai_candidates = ALL_INDICES.copy()
+    st.session_state.ai_next_guess = FIRST_GUESS
+    st.session_state.ai_entropy    = 0.0
+    st.session_state.input_error   = ""
+    st.session_state.page          = "game"
+
+def run_ai_step() -> None:
+    if (st.session_state.ai_guesses and
+            st.session_state.ai_guesses[-1]["feedback"] == (4, 0, 0)):
+        return
+    secret       = st.session_state.secret
+    guess        = st.session_state.ai_next_guess
+    cands_before = len(st.session_state.ai_candidates)
+    entropy_bits = st.session_state.ai_entropy
+    fb        = get_feedback(guess, secret)
+    new_cands = filter_candidates(st.session_state.ai_candidates, guess, fb)
+    st.session_state.ai_guesses.append({
+        "guess": guess, "feedback": fb,
+        "cands_before": cands_before, "cands_after": len(new_cands),
+        "entropy": entropy_bits,
+    })
+    st.session_state.ai_candidates = new_cands
+    if len(new_cands) > 0:
+        ng, ne = best_guess(new_cands)
+        st.session_state.ai_next_guess = ng
+        st.session_state.ai_entropy    = ne
+    else:
+        st.session_state.ai_next_guess = guess
+
+def process_user_guess(raw: str) -> bool:
+    raw = raw.strip()
+    if len(raw) != 4 or not raw.isdigit():
+        st.session_state.input_error = "Enter exactly 4 digits (0–9)."
+        return False
+    if len(set(raw)) != 4:
+        st.session_state.input_error = "No repeated digits allowed."
+        return False
+    guess  = tuple(int(d) for d in raw)
+    already = [g for g, _ in st.session_state.user_guesses]
+    if guess in already:
+        st.session_state.input_error = "Already tried that combination."
+        return False
+    st.session_state.input_error = ""
+    fb = get_feedback(guess, st.session_state.secret)
+    st.session_state.user_guesses.append((guess, fb))
+    run_ai_step()
+    if fb == (4, 0, 0):
+        st.session_state.page = "reveal"
+        return True
+    return False
+
+# ── Pages ─────────────────────────────────────────────────────────────────────
+
+def landing_page() -> None:
+    st.markdown(CSS, unsafe_allow_html=True)
+    _, mid, _ = st.columns([3, 2, 3])
+    with mid:
+        st.markdown('<div class="landing-wrap">', unsafe_allow_html=True)
+        if st.button("START GAME", key="start_btn"):
+            start_game()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def game_page() -> None:
+    st.markdown(CSS, unsafe_allow_html=True)
+    guesses = st.session_state.user_guesses
+    history_html = "".join(
+        guess_row_html(i + 1, g, f) for i, (g, f) in enumerate(guesses)
+    )
+    if not history_html:
+        history_html = (
+            '<div style="font-family:\'Caveat\',cursive;font-size:1.3rem;'
+            'color:#8a7050;text-align:center;padding:0.8rem 0;font-style:italic;">'
+            'No guesses yet — make your first move.</div>'
+        )
+    st.markdown(
+        f'<div class="panel-wrapper"><div class="panel">'
+        f'<div class="panel-title">YOUR PROCESS</div>'
+        f'{history_html}'
+        f'<div class="prompt-label">Enter your next 4-digit guess:</div>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+    _, mid_col, _ = st.columns([1, 2, 1])
+    with mid_col:
+        with st.form("guess_form", clear_on_submit=True):
+            guess_val = st.text_input(
+                "guess", placeholder="_ _ _ _", max_chars=4,
+                key="digit_input", label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("SUBMIT")
+            if submitted and guess_val:
+                process_user_guess(guess_val)
+                st.rerun()
+        if st.session_state.get("input_error"):
+            st.markdown(
+                f'<div class="err-msg">⚠ {st.session_state.input_error}</div>',
+                unsafe_allow_html=True,
+            )
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown('<div class="page-left-content"></div>', unsafe_allow_html=True)
+    with col_right:
+        st.markdown('<div class="page-right-content"></div>', unsafe_allow_html=True)
+
+def reveal_page() -> None:
+    st.markdown(CSS, unsafe_allow_html=True)
+    ai_guesses   = st.session_state.ai_guesses
+    user_guesses = st.session_state.user_guesses
+    n_user       = len(user_guesses)
+    ai_rows_html = ""
+    for i, entry in enumerate(ai_guesses, 1):
+        g, y, r  = entry["feedback"]
+        digits   = "-".join(str(d) for d in entry["guess"])
+        solved   = '<span class="ai-solved-txt">Solved!</span>' if entry["feedback"] == (4, 0, 0) else ""
+        ai_rows_html += (
+            f'<div class="ai-row"><span class="ai-row-num">{i}.</span>'
+            f'<span class="ai-row-digits">{digits}</span>{solved}'
+            f'<span class="guess-feedback">{g}G·{y}Y·{r}R</span></div>'
+        )
+    explain_html = ""
+    for i, entry in enumerate(ai_guesses, 1):
+        raw_text = explain_step(
+            step=i, guess=entry["guess"], feedback=entry["feedback"],
+            cands_before=entry["cands_before"], cands_after=entry["cands_after"],
+            entropy_bits=entry["entropy"],
+        )
+        explain_html += f'<div class="explain-entry">{md_bold(raw_text)}</div>'
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown(
+            f'<div class="page-left-content fade-in">'
+            f'<div class="page-title">AI AGENT SOLUTION PATH</div>{ai_rows_html}</div>',
+            unsafe_allow_html=True,
+        )
+    with col_right:
+        guess_word = "guess" if n_user == 1 else "guesses"
+        st.markdown(
+            f'<div class="page-right-content fade-in">'
+            f'<div class="score-banner">You cracked the cipher in {n_user} {guess_word}!</div>'
+            f'<div class="page-title">STEP-BY-STEP EXPLANATION</div>{explain_html}</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("PLAY AGAIN", key="play_again"):
+            start_game()
+            st.rerun()
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+init_state()
+page = st.session_state.get("page", "landing")
+if page == "landing":
+    landing_page()
+elif page == "game":
+    game_page()
+elif page == "reveal":
+    reveal_page()

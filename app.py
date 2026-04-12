@@ -1,5 +1,5 @@
 """
-Cipher-4 — Streamlit front-end (vintage ledger ui)
+Cipher-4 — Streamlit front-end (memo pad ui + hand-painted feedback)
 """
 import re
 import base64
@@ -24,79 +24,32 @@ def _b64(filename: str, mime: str = "image/png") -> str:
     with open(Path(__file__).parent / "image" / filename, "rb") as f:
         return f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
 
-TEXTURE = _b64("image_7.jpg", "image/jpeg")
+TEXTURE        = _b64("image_7.jpg",   "image/jpeg")
+WRINKLED_PAPER = _b64("image_10.jpg",  "image/jpeg")
+GREEN_PAINT    = _b64("green_paint.png")
+YELLOW_PAINT   = _b64("yellow_paint.png")
+RED_PAINT      = _b64("red_paint.png")
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
-CSS = f"""
+
+CSS_BASE = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
 
 *, *::before, *::after {{ box-sizing: border-box; }}
 
-html, body,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"] {{
-    background: #3A2810 !important;
-    font-family: 'Caveat', cursive;
-    color: #1A0E08;
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
+    font-family: 'Caveat', cursive; color: #1A0E08;
 }}
 
-#MainMenu, footer,
-[data-testid="stToolbar"], [data-testid="stDecoration"],
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
 [data-testid="stStatusWidget"], [data-testid="stHeader"],
 .stDeployButton {{ display: none !important; visibility: hidden !important; }}
 
-/* ─── Open ledger container ─── */
-[data-testid="stMainBlockContainer"] {{
-    max-width: 1120px !important;
-    margin: 2rem auto !important;
-    padding: 0 !important;
-    background-image:
-        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
-        url('{TEXTURE}');
-    background-size: 26px 26px, 26px 26px, cover;
-    background-position: top left, top left, center;
-    background-color: #EDE0B0;
-    box-shadow:
-        0 28px 65px rgba(0,0,0,0.60),
-        0 8px 20px rgba(0,0,0,0.35),
-        inset 0 0 0 1px rgba(60,40,15,0.25);
-    position: relative;
-    min-height: 660px;
-}}
-
-/* Central spine */
-[data-testid="stMainBlockContainer"]::after {{
-    content: '';
-    position: absolute;
-    top: 0; left: calc(50% - 12px);
-    width: 24px; height: 100%;
-    background: linear-gradient(
-        to right,
-        transparent 0%,
-        rgba(40,25,8,0.22) 30%,
-        rgba(40,25,8,0.35) 50%,
-        rgba(40,25,8,0.22) 70%,
-        transparent 100%
-    );
-    pointer-events: none; z-index: 50;
-}}
-
-[data-testid="stHorizontalBlock"] {{ gap: 0 !important; padding: 0 !important; align-items: stretch !important; }}
-[data-testid="stColumn"] {{ padding: 0 !important; background: transparent !important; }}
-[data-testid="stColumn"] > div:first-child {{ background: transparent !important; padding: 0 !important; min-height: 620px; }}
-[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child > div:first-child {{ box-shadow: inset -10px 0 25px rgba(0,0,0,0.10); }}
-[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child > div:first-child {{ box-shadow: inset 10px 0 25px rgba(0,0,0,0.07); }}
-
-/* ─── Buttons ─── */
 div[data-testid="stButton"] > button {{
-    font-family: 'Caveat', cursive !important;
-    font-size: 2.1rem !important; font-weight: 600 !important;
-    letter-spacing: 0.08em !important;
-    background: transparent !important; color: #1A0E08 !important;
-    border: 2.5px solid #1A0E08 !important;
-    padding: 0.6rem 3rem !important; border-radius: 0 !important;
+    font-family: 'Caveat', cursive !important; font-size: 2.1rem !important; font-weight: 600 !important;
+    letter-spacing: 0.08em !important; background: transparent !important; color: #1A0E08 !important;
+    border: 2.5px solid #1A0E08 !important; padding: 0.6rem 3rem !important; border-radius: 0 !important;
     box-shadow: none !important; cursor: pointer !important;
     transition: background 0.08s ease, color 0.08s ease !important;
     display: block !important; margin: 0 auto !important;
@@ -106,20 +59,6 @@ div[data-testid="stButton"] > button:focus {{
     background: #1A0E08 !important; color: #F5ECCC !important; outline: none !important;
 }}
 
-/* ─── YOUR PROCESS panel ─── */
-.panel-wrapper {{ max-width: 540px; margin: 1.8rem auto 0; padding: 0 1.2rem; position: relative; z-index: 60; }}
-.panel {{
-    background-image:
-        linear-gradient(rgba(80,55,20,0.09) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(80,55,20,0.09) 1px, transparent 1px),
-        url('{TEXTURE}');
-    background-size: 26px 26px, 26px 26px, cover;
-    border: 1.5px solid rgba(75,50,18,0.60);
-    box-shadow: 6px 6px 22px rgba(0,0,0,0.32), 0 0 0 1px rgba(75,50,18,0.18);
-    padding: 1.3rem 1.5rem 1.4rem;
-    max-height: 440px; overflow-y: auto;
-    scrollbar-width: thin; scrollbar-color: rgba(105,70,22,0.5) transparent;
-}}
 .panel-title {{
     font-family: 'Caveat', cursive; font-size: 2.4rem; font-weight: 700;
     text-align: center; color: #1A0E08;
@@ -127,15 +66,15 @@ div[data-testid="stButton"] > button:focus {{
     padding-bottom: 0.55rem; margin-bottom: 0.85rem; letter-spacing: 0.04em;
 }}
 
-/* ─── Guess rows ─── */
 .guess-row {{ display: flex; align-items: center; gap: 0.45rem; padding: 0.28rem 0; border-bottom: 1px solid rgba(75,50,18,0.12); font-family: 'Caveat', cursive; }}
 .guess-row:last-child {{ border-bottom: none; }}
 .guess-num {{ font-size: 1rem; font-weight: 600; color: #1A0E08; min-width: 1.5rem; }}
 .guess-digits {{ font-size: 2.2rem; font-weight: 700; color: #1A0E08; flex: 1; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1.5px; }}
-.guess-feedback {{ font-size: 1.1rem; color: #1A0E08; font-weight: 600; letter-spacing: 0.04em; }}
+.solved-label {{ font-size: 0.9rem; color: #1A0E08; font-style: italic; margin-right: 0.2rem; }}
+.guess-blocks {{ display: flex; gap: 4px; flex-shrink: 0; }}
+.feedback-img {{ width: 38px; height: 38px; object-fit: contain; display: inline-block; vertical-align: middle; flex-shrink: 0; border-radius: 3px 4px 2px 4px; }}
 .prompt-label {{ font-family: 'Caveat', cursive; font-size: 1.9rem; color: #1A0E08; margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1.5px solid rgba(75,50,18,0.30); }}
 
-/* ─── Input form ─── */
 .stForm, [data-testid="stForm"], [data-testid="stForm"] > div {{
     background: transparent !important; background-color: transparent !important;
     background-image: none !important; border: none !important; padding: 0 !important; box-shadow: none !important;
@@ -146,30 +85,27 @@ div[data-testid="stButton"] > button:focus {{
     border-radius: 0 !important; box-shadow: none !important; outline: none !important;
 }}
 [data-testid="stTextInput"] input {{
-    border-bottom: 2.5px solid #2A1B0A !important;
-    font-family: 'Caveat', cursive !important; font-size: 3.2rem !important;
-    font-weight: 700 !important; letter-spacing: 0.72em !important;
-    color: #2A1B0A !important; text-align: center !important;
-    padding: 0.1rem 0.5rem !important; max-width: 300px !important;
-    display: block !important; margin: 0 auto !important;
+    border-bottom: 2.5px solid #2A1B0A !important; font-family: 'Caveat', cursive !important;
+    font-size: 3.2rem !important; font-weight: 700 !important; letter-spacing: 0.72em !important;
+    color: #2A1B0A !important; text-align: center !important; padding: 0.1rem 0.5rem !important;
+    max-width: 300px !important; display: block !important; margin: 0 auto !important;
 }}
 [data-testid="stTextInput"] input:focus {{ border-bottom-color: #10B981 !important; }}
 [data-testid="stTextInput"] input::placeholder {{ color: #8A7050 !important; letter-spacing: 0.55em !important; font-weight: 400 !important; }}
+
 [data-testid="stFormSubmitButton"] > button {{
     font-family: 'Caveat', cursive !important; font-size: 1.9rem !important; font-weight: 600 !important;
     background: transparent !important; color: #1A0E08 !important;
     border: 2px solid rgba(75,50,18,0.55) !important; padding: 0.3rem 2rem !important;
     border-radius: 0 !important; box-shadow: none !important; cursor: pointer !important;
-    margin-top: 0.6rem !important; display: block !important; margin-left: auto !important; margin-right: auto !important;
-    letter-spacing: 0.06em !important;
+    margin-top: 0.6rem !important; display: block !important;
+    margin-left: auto !important; margin-right: auto !important; letter-spacing: 0.06em !important;
 }}
 [data-testid="stFormSubmitButton"] > button:hover,
 [data-testid="stFormSubmitButton"] > button:focus {{ background: rgba(75,50,18,0.08) !important; outline: none !important; }}
 
-.err-msg {{ font-family: 'Caveat', cursive; font-size: 1.05rem; color: #962828; margin-top: 0.25rem; }}
+.err-msg {{ font-family: 'Caveat', cursive; font-size: 1.05rem; color: #962828; margin-top: 0.25rem; text-align: center; }}
 
-/* ─── Page content ─── */
-.page-left-content, .page-right-content {{ padding: 2.5rem 2.2rem 2rem; min-height: 620px; position: relative; }}
 .page-title {{ font-family: 'Caveat', cursive; font-size: 1.3rem; font-weight: 700; text-align: center; color: #1A0E08; border-bottom: 2px solid #1A0E08; padding-bottom: 0.45rem; margin-bottom: 1.2rem; letter-spacing: 0.04em; }}
 .score-banner {{ font-family: 'Caveat', cursive; font-size: 2rem; font-weight: 700; color: #1A0E08; text-align: center; margin-bottom: 1.1rem; line-height: 1.3; }}
 .ai-row {{ display: flex; align-items: baseline; gap: 0.45rem; margin-bottom: 0.65rem; }}
@@ -187,13 +123,94 @@ div[data-testid="stButton"] > button:focus {{
 </style>
 """
 
+CSS_BOOK_BG = f"""
+<style>
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{ background: #3A2810 !important; }}
+[data-testid="stMainBlockContainer"] {{
+    max-width: 1120px !important; margin: 2rem auto !important; padding: 0 !important;
+    background-image:
+        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
+        url('{TEXTURE}');
+    background-size: 26px 26px, 26px 26px, cover;
+    background-position: top left, top left, center;
+    background-color: #EDE0B0;
+    box-shadow: 0 28px 65px rgba(0,0,0,0.60), 0 8px 20px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(60,40,15,0.25);
+    position: relative; min-height: 660px;
+}}
+[data-testid="stMainBlockContainer"]::after {{
+    content: ''; position: absolute; top: 0; left: calc(50% - 12px); width: 24px; height: 100%;
+    background: linear-gradient(to right, transparent 0%, rgba(40,25,8,0.22) 30%, rgba(40,25,8,0.35) 50%, rgba(40,25,8,0.22) 70%, transparent 100%);
+    pointer-events: none; z-index: 50;
+}}
+[data-testid="stHorizontalBlock"] {{ gap: 0 !important; padding: 0 !important; align-items: stretch !important; }}
+[data-testid="stColumn"] {{ padding: 0 !important; background: transparent !important; }}
+[data-testid="stColumn"] > div:first-child {{ background: transparent !important; padding: 0 !important; min-height: 620px; }}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child > div:first-child {{ box-shadow: inset -10px 0 25px rgba(0,0,0,0.10); }}
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child > div:first-child {{ box-shadow: inset 10px 0 25px rgba(0,0,0,0.07); }}
+.page-left-content, .page-right-content {{ padding: 2.5rem 2.2rem 2rem; min-height: 620px; position: relative; }}
+.landing-wrap {{ display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 600px; padding: 2rem; }}
+</style>
+"""
+
+CSS_GAME_BG = f"""
+<style>
+[data-testid="stAppViewContainer"] {{
+    background-image:
+        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
+        url('{TEXTURE}');
+    background-size: 26px 26px, 26px 26px, cover;
+    background-attachment: fixed; background-color: #EDE0B0 !important;
+    background-position: top left, top left, center; min-height: 100vh;
+}}
+[data-testid="stMain"] {{
+    background: transparent !important; display: flex !important; flex-direction: column !important;
+    align-items: center !important; justify-content: center !important;
+    min-height: 100vh !important; padding: 2.5rem 1rem !important;
+}}
+[data-testid="stMainBlockContainer"] {{
+    max-width: 600px !important; width: 100% !important; margin: 0 auto !important; padding: 0 !important;
+    background: transparent !important; background-image: none !important; box-shadow: none !important;
+}}
+[data-testid="stMainBlockContainer"]::after {{ display: none !important; }}
+[data-testid="stHorizontalBlock"] {{ gap: 0 !important; padding: 0 !important; }}
+[data-testid="stColumn"] {{ padding: 0 !important; background: transparent !important; }}
+[data-testid="stColumn"] > div:first-child {{ background: transparent !important; padding: 0 !important; }}
+
+.panel-wrapper {{ width: 100%; margin: 0 auto 0.75rem; padding-top: 20px; position: relative; z-index: 60; }}
+.panel-wrapper::before {{
+    content: ''; position: absolute; top: 0; left: 50%;
+    transform: translateX(-50%) rotate(-1.5deg);
+    width: 88px; height: 28px; background: rgba(210,180,140,0.85);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.38);
+    border-radius: 2px; z-index: 4;
+}}
+.panel {{
+    background-image: linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.18)), url('{WRINKLED_PAPER}');
+    background-size: cover; background-position: center;
+    border: 1.5px solid rgba(75,50,18,0.60); border-radius: 2px;
+    box-shadow: 4px 10px 38px rgba(0,0,0,0.52), 2px 4px 14px rgba(0,0,0,0.30), -1px 1px 5px rgba(0,0,0,0.12);
+    padding: 1.3rem 1.5rem 0; position: relative; overflow: visible;
+}}
+.panel-inner {{ max-height: 420px; overflow-y: auto; padding-bottom: 1.5rem; scrollbar-width: thin; scrollbar-color: rgba(105,70,22,0.5) transparent; }}
+.panel-inner::-webkit-scrollbar {{ width: 6px; }}
+.panel-inner::-webkit-scrollbar-thumb {{ background: rgba(105,70,22,0.50); border-radius: 3px; }}
+</style>
+"""
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def md_bold(text: str) -> str:
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
 
-def feedback_text(g: int, y: int, r: int) -> str:
-    return f'<span class="guess-feedback">{g}G · {y}Y · {r}R</span>'
+def blocks_html(g: int, y: int, r: int) -> str:
+    imgs = (
+        [f'<img src="{GREEN_PAINT}"  class="feedback-img" alt="green">']  * g +
+        [f'<img src="{YELLOW_PAINT}" class="feedback-img" alt="yellow">'] * y +
+        [f'<img src="{RED_PAINT}"    class="feedback-img" alt="red">']    * r
+    )
+    return "".join(imgs)
 
 def guess_row_html(num: int, guess: tuple, feedback: tuple) -> str:
     g, y, r = feedback
@@ -202,7 +219,7 @@ def guess_row_html(num: int, guess: tuple, feedback: tuple) -> str:
         f'<div class="guess-row">'
         f'<span class="guess-num">{num}.</span>'
         f'<span class="guess-digits">{digits}</span>'
-        f'{feedback_text(g, y, r)}'
+        f'<div class="guess-blocks">{blocks_html(g, y, r)}</div>'
         f'</div>'
     )
 
@@ -270,7 +287,7 @@ def process_user_guess(raw: str) -> bool:
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
 def landing_page() -> None:
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
     _, mid, _ = st.columns([3, 2, 3])
     with mid:
         st.markdown('<div class="landing-wrap">', unsafe_allow_html=True)
@@ -280,7 +297,7 @@ def landing_page() -> None:
         st.markdown('</div>', unsafe_allow_html=True)
 
 def game_page() -> None:
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS_BASE + CSS_GAME_BG, unsafe_allow_html=True)
     guesses = st.session_state.user_guesses
     history_html = "".join(
         guess_row_html(i + 1, g, f) for i, (g, f) in enumerate(guesses)
@@ -292,11 +309,11 @@ def game_page() -> None:
             'No guesses yet — make your first move.</div>'
         )
     st.markdown(
-        f'<div class="panel-wrapper"><div class="panel">'
+        f'<div class="panel-wrapper"><div class="panel"><div class="panel-inner">'
         f'<div class="panel-title">YOUR PROCESS</div>'
         f'{history_html}'
         f'<div class="prompt-label">Enter your next 4-digit guess:</div>'
-        f'</div></div>',
+        f'</div></div></div>',
         unsafe_allow_html=True,
     )
     _, mid_col, _ = st.columns([1, 2, 1])
@@ -315,14 +332,9 @@ def game_page() -> None:
                 f'<div class="err-msg">⚠ {st.session_state.input_error}</div>',
                 unsafe_allow_html=True,
             )
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.markdown('<div class="page-left-content"></div>', unsafe_allow_html=True)
-    with col_right:
-        st.markdown('<div class="page-right-content"></div>', unsafe_allow_html=True)
 
 def reveal_page() -> None:
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
     ai_guesses   = st.session_state.ai_guesses
     user_guesses = st.session_state.user_guesses
     n_user       = len(user_guesses)
@@ -334,7 +346,7 @@ def reveal_page() -> None:
         ai_rows_html += (
             f'<div class="ai-row"><span class="ai-row-num">{i}.</span>'
             f'<span class="ai-row-digits">{digits}</span>{solved}'
-            f'<span class="guess-feedback">{g}G·{y}Y·{r}R</span></div>'
+            f'<div class="guess-blocks">{blocks_html(g, y, r)}</div></div>'
         )
     explain_html = ""
     for i, entry in enumerate(ai_guesses, 1):

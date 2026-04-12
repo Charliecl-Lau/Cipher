@@ -16,7 +16,7 @@ from cipher_engine import (
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="4-Digit Guessing Game",
+    page_title="Cipher",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -236,6 +236,10 @@ div[data-testid="stButton"] > button:focus {{
 }}
 
 /* ─── SUBMIT button ─── */
+[data-testid="stFormSubmitButton"] {{
+    display: flex !important;
+    justify-content: center !important;
+}}
 [data-testid="stFormSubmitButton"] > button {{
     font-family: 'Caveat', cursive !important;
     font-size: 1.9rem !important;
@@ -248,9 +252,6 @@ div[data-testid="stButton"] > button:focus {{
     box-shadow: none !important;
     cursor: pointer !important;
     margin-top: 0.6rem !important;
-    display: block !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
     letter-spacing: 0.06em !important;
 }}
 
@@ -600,6 +601,127 @@ html, body,
 </style>
 """
 
+# ── Flat parchment — landing page ──────────────────────────────────────────────
+CSS_LANDING_BG = f"""
+<style>
+/* ─── Dark outer surround ─── */
+html, body,
+[data-testid="stAppViewContainer"] {{
+    background: #3A2810 !important;
+}}
+
+[data-testid="stMain"] {{
+    background: transparent !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 10vh !important;
+    padding: 2.5rem 1rem !important;
+}}
+
+/* ─── Framed parchment canvas ─── */
+[data-testid="stMainBlockContainer"] {{
+    max-width: 1300px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 3rem 2.5rem !important;
+    background-image:
+        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
+        url('{TEXTURE}');
+    background-size: 26px 26px, 26px 26px, cover;
+    background-position: top left, top left, center;
+    background-color: #EDE0B0;
+    box-shadow:
+        0 28px 65px rgba(0,0,0,0.60),
+        0 8px 20px rgba(0,0,0,0.35),
+        inset 0 0 0 1px rgba(60,40,15,0.25);
+}}
+
+[data-testid="stMainBlockContainer"]::after {{
+    display: none !important;
+}}
+
+/* ─── Game title ─── */
+.game-title {{
+    font-family: 'Caveat', cursive;
+    font-size: 4.5rem;
+    font-weight: 700;
+    color: #2A1B0A;
+    text-align: center;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+    margin: 0 0 1.4rem 0;
+    padding: 0;
+}}
+
+.landing-btn-gap {{ height: 0.85rem; }}
+
+/* Center the title + button stack vertically and horizontally */
+[data-testid="stVerticalBlock"]:has(.landing-btn-gap) {{
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 60vh;
+}}
+
+/* Center each child element */
+[data-testid="stVerticalBlock"]:has(.landing-btn-gap) > [data-testid="stButton"],
+[data-testid="stVerticalBlock"]:has(.landing-btn-gap) > [data-testid="stMarkdown"] {{
+    display: flex !important;
+    justify-content: center !important;
+}}
+
+/* ─── START GAME button ─── */
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button {{
+    background:     rgba(246, 239, 215, 0.92) !important;
+    border:         1.5px solid rgba(42, 27, 10, 0.42) !important;
+    color:          #2A1B0A !important;
+    font-family:    'Caveat', cursive !important;
+    font-size:      1.0rem !important;
+    font-weight:    500 !important;
+    letter-spacing: 0.22em !important;
+    padding:        0.52rem 2.4rem !important;
+    width:          220px !important;
+    box-shadow:     0 1px 3px rgba(0,0,0,0.07) !important;
+    text-transform: uppercase !important;
+    border-radius:  0 !important;
+    transition:     background 0.08s ease !important;
+}}
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button:hover,
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button:focus {{
+    background: rgba(230, 222, 196, 0.98) !important;
+    color:      #1A0E08 !important;
+    outline:    none !important;
+}}
+
+/* ─── INSTRUCTIONS button ─── */
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button {{
+    background:     rgba(148, 120, 72, 0.36) !important;
+    border:         1.5px solid rgba(42, 27, 10, 0.42) !important;
+    color:          #2A1B0A !important;
+    font-family:    'Caveat', cursive !important;
+    font-size:      1.0rem !important;
+    font-weight:    500 !important;
+    letter-spacing: 0.22em !important;
+    padding:        0.52rem 2.4rem !important;
+    width:          220x !important;
+    box-shadow:     inset 0 1px 4px rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.06) !important;
+    text-transform: uppercase !important;
+    border-radius:  0 !important;
+    transition:     background 0.08s ease !important;
+}}
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button:hover,
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button:focus {{
+    background: rgba(148, 120, 72, 0.58) !important;
+    color:      #1A0E08 !important;
+    outline:    none !important;
+}}
+</style>
+"""
+
 # ── Flat seamless parchment + memo pad — active game page only ─────────────────
 CSS_GAME_BG = f"""
 <style>
@@ -884,23 +1006,21 @@ def process_user_guess(raw: str) -> bool:
 # ── Pages ──────────────────────────────────────────────────────────────────────
 
 def landing_page() -> None:
-    st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
+    st.markdown(CSS_BASE + CSS_LANDING_BG, unsafe_allow_html=True)
 
-    _, mid, _ = st.columns([3, 2, 3])
-    with mid:
-        st.markdown('<div class="game-title">Cipher</div>', unsafe_allow_html=True)
+    st.markdown('<div class="game-title">Cipher</div>', unsafe_allow_html=True)
 
-        st.markdown('<div id="start-btn-marker"></div>', unsafe_allow_html=True)
-        if st.button("START GAME", key="start_btn"):
-            start_game()
-            st.rerun()
+    st.markdown('<div id="start-btn-marker"></div>', unsafe_allow_html=True)
+    if st.button("START GAME", key="start_btn"):
+        start_game()
+        st.rerun()
 
-        st.markdown('<div class="landing-btn-gap"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="landing-btn-gap"></div>', unsafe_allow_html=True)
 
-        st.markdown('<div id="instr-btn-marker"></div>', unsafe_allow_html=True)
-        if st.button("INSTRUCTIONS", key="instructions_btn"):
-            st.session_state.page = "instructions"
-            st.rerun()
+    st.markdown('<div id="instr-btn-marker"></div>', unsafe_allow_html=True)
+    if st.button("INSTRUCTIONS", key="instructions_btn"):
+        st.session_state.page = "instructions"
+        st.rerun()
 
 
 def instructions_page() -> None:
@@ -966,23 +1086,21 @@ def game_page() -> None:
         unsafe_allow_html=True,
     )
 
-    _, mid_col, _ = st.columns([1, 2, 1])
-    with mid_col:
-        with st.form("guess_form", clear_on_submit=True):
-            guess_val = st.text_input(
-                "guess", placeholder="_ _ _ _", max_chars=4,
-                key="digit_input", label_visibility="collapsed",
-            )
-            submitted = st.form_submit_button("SUBMIT")
-            if submitted and guess_val:
-                process_user_guess(guess_val)
-                st.rerun()
+    with st.form("guess_form", clear_on_submit=True):
+        guess_val = st.text_input(
+            "guess", placeholder="_ _ _ _", max_chars=4,
+            key="digit_input", label_visibility="collapsed",
+        )
+        submitted = st.form_submit_button("SUBMIT")
+        if submitted and guess_val:
+            process_user_guess(guess_val)
+            st.rerun()
 
-        if st.session_state.get("input_error"):
-            st.markdown(
-                f'<div class="err-msg">⚠ {st.session_state.input_error}</div>',
-                unsafe_allow_html=True,
-            )
+    if st.session_state.get("input_error"):
+        st.markdown(
+            f'<div class="err-msg">⚠ {st.session_state.input_error}</div>',
+            unsafe_allow_html=True,
+        )
 
     js_input_validate()
 

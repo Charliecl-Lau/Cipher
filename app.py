@@ -1,5 +1,5 @@
 """
-Cipher-4 — Streamlit front-end (open ledger visual)
+Cipher — Streamlit front-end (open ledger visual)
 """
 import re
 import base64
@@ -441,34 +441,92 @@ html, body,
     position: relative;
 }}
 
-/* ─── Landing page wrapper — title anchored to top ─── */
+/* ─── Landing page wrapper ─── */
 .landing-wrap {{
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     flex-direction: column;
     width: 100%;
     min-height: 600px;
-    padding: 3.5rem 1rem 2rem;
+    padding: 0 1rem;
     gap: 0;
 }}
 
 /* ─── Game title on landing page ─── */
 .game-title {{
     font-family: 'Caveat', cursive;
-    font-size: 6.5rem;
+    font-size: 4.5rem;
     font-weight: 700;
     color: #2A1B0A;
     text-align: center;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     line-height: 1.05;
-    margin: 0 0 2.8rem 0;
+    margin: 0 0 1.4rem 0;
     padding: 0;
 }}
 
 /* Spacing between the two landing buttons */
 .landing-btn-gap {{
     height: 0.85rem;
+}}
+
+/* ─── Landing page: dead-center the title+button stack ─── */
+/* :has(.landing-btn-gap) scopes these rules to the landing column only */
+[data-testid="stVerticalBlock"]:has(.landing-btn-gap) {{
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 560px;
+}}
+
+[data-testid="stVerticalBlock"]:has(.landing-btn-gap) > * {{
+    width: 100%;
+}}
+
+/* ─── Landing START GAME button: light cream fill ─── */
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button {{
+    background:    rgba(246, 239, 215, 0.92) !important;
+    border:        1.5px solid rgba(42, 27, 10, 0.55) !important;
+    color:         #2A1B0A !important;
+    font-family:   'Caveat', cursive !important;
+    font-size:     1.0rem !important;
+    font-weight:   500 !important;
+    letter-spacing: 0.22em !important;
+    padding:       0.52rem 2.4rem !important;
+    box-shadow:    0 1px 3px rgba(0,0,0,0.07) !important;
+    text-transform: uppercase !important;
+    border-radius: 0 !important;
+    transition:    background 0.08s ease !important;
+}}
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button:hover,
+[data-testid="stMarkdown"]:has(#start-btn-marker) ~ [data-testid="stButton"] > button:focus {{
+    background: rgba(230, 222, 196, 0.98) !important;
+    color:      #1A0E08 !important;
+    outline:    none !important;
+}}
+
+/* ─── Landing INSTRUCTIONS button: darker recessed ─── */
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button {{
+    background:    rgba(148, 120, 72, 0.36) !important;
+    border:        1.5px solid rgba(42, 27, 10, 0.42) !important;
+    color:         #2A1B0A !important;
+    font-family:   'Caveat', cursive !important;
+    font-size:     1.0rem !important;
+    font-weight:   500 !important;
+    letter-spacing: 0.22em !important;
+    padding:       0.52rem 2.4rem !important;
+    box-shadow:    inset 0 1px 4px rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.06) !important;
+    text-transform: uppercase !important;
+    border-radius: 0 !important;
+    transition:    background 0.08s ease !important;
+}}
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button:hover,
+[data-testid="stMarkdown"]:has(#instr-btn-marker) ~ [data-testid="stButton"] > button:focus {{
+    background: rgba(148, 120, 72, 0.58) !important;
+    color:      #1A0E08 !important;
+    outline:    none !important;
 }}
 
 /* ─── Instructions index card ─── */
@@ -830,20 +888,19 @@ def landing_page() -> None:
 
     _, mid, _ = st.columns([3, 2, 3])
     with mid:
-        st.markdown('<div class="landing-wrap">', unsafe_allow_html=True)
         st.markdown('<div class="game-title">Cipher</div>', unsafe_allow_html=True)
 
+        st.markdown('<div id="start-btn-marker"></div>', unsafe_allow_html=True)
         if st.button("START GAME", key="start_btn"):
             start_game()
             st.rerun()
 
         st.markdown('<div class="landing-btn-gap"></div>', unsafe_allow_html=True)
 
+        st.markdown('<div id="instr-btn-marker"></div>', unsafe_allow_html=True)
         if st.button("INSTRUCTIONS", key="instructions_btn"):
             st.session_state.page = "instructions"
             st.rerun()
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def instructions_page() -> None:

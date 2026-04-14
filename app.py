@@ -352,21 +352,118 @@ div[data-testid="stButton"] > button:focus {{
 .fade-in {{ animation: fadeUp 0.65s ease; }}
 
 [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"]:empty {{ display: none; }}
+
+/* ─── Narrative intro dialog ─── */
+[data-testid="stModal"],
+[data-testid="stDialog"] {{
+    font-family: 'Caveat', cursive !important;
+}}
+
+/* Dialog backdrop tint */
+[data-testid="stModal"]::before,
+div[data-testid="stModal"] > div:first-child {{
+    background: rgba(20, 10, 4, 0.82) !important;
+}}
+
+/* Dialog content box — parchment texture */
+[data-testid="stModal"] > div > div,
+[data-testid="stDialogContent"],
+div[role="dialog"] {{
+    background-image:
+        linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
+        url('{TEXTURE}') !important;
+    background-size: 26px 26px, 26px 26px, cover !important;
+    background-color: #EDE0B0 !important;
+    border: 1.5px solid rgba(75,50,18,0.55) !important;
+    border-radius: 2px !important;
+    color: #1A0E08 !important;
+    font-family: 'Caveat', cursive !important;
+}}
+
+.dialog-title {{
+    font-family: 'Caveat', cursive;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #1A0E08;
+    text-align: center;
+    border-bottom: 2px solid rgba(75,50,18,0.55);
+    padding-bottom: 0.6rem;
+    margin-bottom: 1.2rem;
+    letter-spacing: 0.06em;
+}}
+
+.dialog-lore {{
+    font-family: 'Caveat', cursive;
+    font-size: 1.25rem;
+    color: #1A0E08;
+    line-height: 1.65;
+    margin-bottom: 1rem;
+    font-style: italic;
+    text-align: center;
+}}
+
+.dialog-rules-block {{
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    color: #1A0E08;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+}}
+
+.dialog-question {{
+    font-family: 'Caveat', cursive;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1A0E08;
+    text-align: center;
+    margin-top: 1.2rem;
+    margin-bottom: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed rgba(75,50,18,0.35);
+    font-style: italic;
+}}
+
+/* ─── Win / Loss declaration banner ─── */
+.win-loss-banner {{
+    font-family: 'Caveat', cursive;
+    font-size: 2.6rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.6rem 1rem;
+    margin-bottom: 1.1rem;
+    border: 2.5px solid #1A0E08;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+}}
+
+.win-loss-banner.win {{
+    color: #1A5C2E;
+    border-color: #1A5C2E;
+    background: rgba(26, 92, 46, 0.08);
+}}
+
+.win-loss-banner.lose {{
+    color: #7A1A1A;
+    border-color: #7A1A1A;
+    background: rgba(122, 26, 26, 0.08);
+}}
 </style>
 """
 
-# ── Open-book/ledger background — landing + instructions + result pages ────────
+# ── Open-book/ledger background — result page ─────────────────────────────────
 CSS_BOOK_BG = f"""
 <style>
 html, body,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"] {{
-    background: #3A2810 !important;
+    background: #5A3A22 !important;
 }}
 
 /* ─── Open ledger container ─── */
 [data-testid="stMainBlockContainer"] {{
-    max-width: 1120px !important;
+    max-width: 1200px !important;
+    width: 95vw !important;
     margin: 2rem auto !important;
     padding: 0 !important;
     background-image:
@@ -607,7 +704,7 @@ CSS_LANDING_BG = f"""
 /* ─── Dark outer surround ─── */
 html, body,
 [data-testid="stAppViewContainer"] {{
-    background: #3A2810 !important;
+    background: #5A3A22 !important;
 }}
 
 [data-testid="stMain"] {{
@@ -839,6 +936,18 @@ CSS_GAME_BG = f"""
     background: rgba(105,70,22,0.50);
     border-radius: 3px;
 }}
+
+/* ─── Hide native text input + submit (replaced by custom 4-digit component) ─── */
+[data-testid="stTextInput"],
+[data-testid="stFormSubmitButton"] {{
+    position: fixed !important;
+    left: -9999px !important;
+    top: -9999px !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+}}
 </style>
 """
 
@@ -1005,6 +1114,141 @@ def process_user_guess(raw: str) -> bool:
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
 
+@st.dialog("— CIPHER —", width="large")
+def show_intro_dialog() -> None:
+    """Narrative briefing overlay shown after clicking START GAME."""
+    st.markdown(
+        f'<div class="dialog-title">MISSION BRIEFING</div>'
+        f'<div class="dialog-lore">'
+        f'The year is uncertain. The code is not.<br>'
+        f'Somewhere in the cipher, a four-digit sequence waits —<br>'
+        f'known only to an agent of pure logic.'
+        f'</div>'
+        f'<div class="dialog-rules-block">'
+        f'<p style="font-size:1.15rem;margin:0 0 0.7rem 0;">Guess the <strong>4-digit secret code</strong>. No repeating digits.</p>'
+        f'<p style="font-size:1.05rem;color:#3A2810;margin:0 0 0.55rem 0;">After each guess you receive colour feedback:</p>'
+        f'<div class="rule-row"><img src="{GREEN_PAINT}" class="rule-img" alt="green">'
+        f'<span><strong>Green</strong> — correct digit &amp; correct position</span></div>'
+        f'<div class="rule-row"><img src="{YELLOW_PAINT}" class="rule-img" alt="yellow">'
+        f'<span><strong>Yellow</strong> — correct digit, wrong position</span></div>'
+        f'<div class="rule-row"><img src="{RED_PAINT}" class="rule-img" alt="red">'
+        f'<span><strong>Red</strong> — digit not in the code at all</span></div>'
+        f'<p style="font-size:1.0rem;color:#5C3A1A;margin-top:0.8rem;font-style:italic;">'
+        f'Feedback blocks do <em>not</em> show exact digit positions — only counts. '
+        f'No repeated digits. No second chances once you submit.</p>'
+        f'</div>'
+        f'<div class="dialog-lore" style="margin-bottom:0;">'
+        f'Alongside you, the <strong>Entropy Agent</strong> — a mathematical construct '
+        f'running on pure Information Theory — races to the same answer. '
+        f'It never guesses blindly. It never wastes a move.'
+        f'</div>'
+        f'<div class="dialog-question">'
+        f'Can human intuition beat an Information Theory algorithm?'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("COMMENCE", key="commence_btn"):
+        start_game()
+        st.rerun()
+
+
+def digit_input_component() -> None:
+    """Custom 4-box digit input rendered as an HTML/JS iframe component."""
+    component_html = f"""
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: transparent; font-family: 'Caveat', cursive; display: flex; flex-direction: column; align-items: center; padding: 6px 0; }}
+  .digit-grid {{ display: flex; gap: 14px; justify-content: center; margin-bottom: 14px; }}
+  .digit-box {{
+    width: 64px; height: 76px;
+    border: none; border-bottom: 3px solid #2A1B0A;
+    background: transparent;
+    font-family: 'Caveat', cursive; font-size: 3rem; font-weight: 700;
+    color: #2A1B0A; text-align: center; outline: none;
+    transition: border-color 0.1s;
+  }}
+  .digit-box:focus {{ border-bottom-color: #10B981; }}
+  .digit-box.filled {{ border-bottom-color: #4B3212; }}
+  #submit-btn {{
+    display: block; margin: 0 auto;
+    font-family: 'Caveat', cursive; font-size: 1.5rem; font-weight: 600;
+    background: transparent; color: #2A1B0A;
+    border: 2px solid rgba(75,50,18,0.55);
+    padding: 0.28rem 2.2rem; cursor: pointer; letter-spacing: 0.06em;
+    border-radius: 0; transition: background 0.08s;
+  }}
+  #submit-btn:hover {{ background: rgba(75,50,18,0.09); }}
+  #err-msg {{ font-family:'Caveat',cursive; font-size:1rem; color:#962828; text-align:center; margin-top:6px; min-height:1.1rem; }}
+</style>
+<div class="digit-grid">
+  <input class="digit-box" id="d0" maxlength="1" type="text" inputmode="numeric" autocomplete="off">
+  <input class="digit-box" id="d1" maxlength="1" type="text" inputmode="numeric" autocomplete="off">
+  <input class="digit-box" id="d2" maxlength="1" type="text" inputmode="numeric" autocomplete="off">
+  <input class="digit-box" id="d3" maxlength="1" type="text" inputmode="numeric" autocomplete="off">
+</div>
+<button id="submit-btn">SUBMIT</button>
+<div id="err-msg"></div>
+<script>
+(function(){{
+  const boxes = Array.from(document.querySelectorAll('.digit-box'));
+  const submitBtn = document.getElementById('submit-btn');
+  const errMsg = document.getElementById('err-msg');
+  const doc = window.parent.document;
+
+  // Focus first box on load
+  setTimeout(() => boxes[0].focus(), 120);
+
+  function showErr(msg) {{
+    errMsg.textContent = msg;
+    setTimeout(() => {{ errMsg.textContent = ''; }}, 2500);
+  }}
+
+  boxes.forEach((box, i) => {{
+    box.addEventListener('keydown', e => {{
+      if (e.key === 'Backspace' && box.value === '' && i > 0) {{
+        e.preventDefault(); boxes[i-1].value = ''; boxes[i-1].classList.remove('filled'); boxes[i-1].focus(); return;
+      }}
+      if (e.key === 'ArrowLeft'  && i > 0) {{ boxes[i-1].focus(); return; }}
+      if (e.key === 'ArrowRight' && i < 3) {{ boxes[i+1].focus(); return; }}
+      if (e.key === 'Enter') {{ submitBtn.click(); return; }}
+    }});
+    box.addEventListener('input', () => {{
+      const v = box.value.replace(/[^0-9]/g, '');
+      if (!v) {{ box.value = ''; box.classList.remove('filled'); return; }}
+      const digit = v[v.length - 1];
+      const others = boxes.filter((_, j) => j !== i).map(b => b.value);
+      if (others.includes(digit)) {{
+        showErr('No repeated digits!'); box.value = ''; box.classList.remove('filled'); return;
+      }}
+      box.value = digit; box.classList.add('filled');
+      errMsg.textContent = '';
+      if (i < 3) boxes[i+1].focus();
+    }});
+  }});
+
+  submitBtn.addEventListener('click', () => {{
+    const digits = boxes.map(b => b.value);
+    if (digits.some(d => d === '')) {{ showErr('Fill all 4 digit slots.'); return; }}
+    const value = digits.join('');
+    const stInput = doc.querySelector('[data-testid="stTextInput"] input');
+    if (!stInput) {{ showErr('Input not ready — try again.'); return; }}
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, 'value').set;
+    nativeSetter.call(stInput, value);
+    stInput.dispatchEvent(new window.parent.Event('input', {{ bubbles: true }}));
+    boxes.forEach(b => {{ b.value = ''; b.classList.remove('filled'); }});
+    boxes[0].focus();
+    setTimeout(() => {{
+      const stSubmit = doc.querySelector('[data-testid="stFormSubmitButton"] button');
+      if (stSubmit) stSubmit.click();
+    }}, 80);
+  }});
+}})();
+</script>
+"""
+    components.html(component_html, height=175)
+
+
 def landing_page() -> None:
     st.markdown(CSS_BASE + CSS_LANDING_BG, unsafe_allow_html=True)
 
@@ -1012,50 +1256,8 @@ def landing_page() -> None:
 
     st.markdown('<div id="start-btn-marker"></div>', unsafe_allow_html=True)
     if st.button("START GAME", key="start_btn"):
-        start_game()
-        st.rerun()
+        show_intro_dialog()
 
-    st.markdown('<div class="landing-btn-gap"></div>', unsafe_allow_html=True)
-
-    st.markdown('<div id="instr-btn-marker"></div>', unsafe_allow_html=True)
-    if st.button("INSTRUCTIONS", key="instructions_btn"):
-        st.session_state.page = "instructions"
-        st.rerun()
-
-
-def instructions_page() -> None:
-    st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
-
-    _, mid, _ = st.columns([2, 3, 2])
-    with mid:
-        st.markdown(
-            f'<div class="index-card">'
-            f'<div class="index-card-title">HOW TO PLAY</div>'
-            f'<div class="index-card-body">'
-            f'<p class="rule-main">Guess the <strong>4-digit secret code</strong>. No repeating digits.</p>'
-            f'<p class="rule-sub">After each guess you receive colour feedback:</p>'
-            f'<div class="rule-row">'
-            f'  <img src="{GREEN_PAINT}" class="rule-img" alt="green">'
-            f'  <span><strong>Green</strong> — correct digit &amp; correct position</span>'
-            f'</div>'
-            f'<div class="rule-row">'
-            f'  <img src="{YELLOW_PAINT}" class="rule-img" alt="yellow">'
-            f'  <span><strong>Yellow</strong> — correct digit, wrong position</span>'
-            f'</div>'
-            f'<div class="rule-row">'
-            f'  <img src="{RED_PAINT}" class="rule-img" alt="red">'
-            f'  <span><strong>Red</strong> — digit not in the code at all</span>'
-            f'</div>'
-            f'<p class="rule-note">The feedback blocks do <em>not</em> correspond to the '
-            f'exact positions of the digits — only the counts are shown.</p>'
-            f'</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        if st.button("CLOSE", key="close_btn"):
-            st.session_state.page = "landing"
-            st.rerun()
 
 
 def game_page() -> None:
@@ -1086,6 +1288,8 @@ def game_page() -> None:
         unsafe_allow_html=True,
     )
 
+    # Hidden Streamlit form — kept for server-side processing;
+    # the native input and submit button are hidden via CSS.
     with st.form("guess_form", clear_on_submit=True):
         guess_val = st.text_input(
             "guess", placeholder="_ _ _ _", max_chars=4,
@@ -1096,13 +1300,14 @@ def game_page() -> None:
             process_user_guess(guess_val)
             st.rerun()
 
+    # Custom 4-digit input grid (non-linear, no per-keystroke reruns)
+    digit_input_component()
+
     if st.session_state.get("input_error"):
         st.markdown(
             f'<div class="err-msg">⚠ {st.session_state.input_error}</div>',
             unsafe_allow_html=True,
         )
-
-    js_input_validate()
 
 
 def reveal_page() -> None:
@@ -1111,8 +1316,21 @@ def reveal_page() -> None:
     ai_guesses   = st.session_state.ai_guesses
     user_guesses = st.session_state.user_guesses
     n_user       = len(user_guesses)
+    n_ai         = len(ai_guesses)
 
-    # ── Left column: AI solution path ───────────────────────────────────────
+    # ── Win / loss determination ──────────────────────────────────────────────
+    user_won     = n_user <= n_ai
+    outcome_cls  = "win"  if user_won else "lose"
+    outcome_txt  = "You Win!" if user_won else "The AI Wins."
+    outcome_sub  = (
+        f"You solved it in {n_user} {'guess' if n_user == 1 else 'guesses'} — "
+        f"the AI needed {n_ai}."
+        if user_won else
+        f"You needed {n_user} {'guess' if n_user == 1 else 'guesses'} — "
+        f"the AI solved it in {n_ai}."
+    )
+
+    # ── AI solution path rows ─────────────────────────────────────────────────
     ai_rows_html = ""
     for i, entry in enumerate(ai_guesses, 1):
         g, y, r     = entry["feedback"]
@@ -1127,21 +1345,21 @@ def reveal_page() -> None:
             f'</div>'
         )
 
+    # ── Left column: win/loss + user steps + AI path + Play Again ────────────
+    guess_word = "guess" if n_user == 1 else "guesses"
     left_html = (
         f'<div class="page-left-content fade-in">'
+        f'<div class="win-loss-banner {outcome_cls}">'
+        f'{outcome_txt}<br>'
+        f'<span style="font-size:1.25rem;font-weight:500;">{outcome_sub}</span>'
+        f'</div>'
+        f'<div class="score-banner">You cracked the cipher in {n_user} {guess_word}!</div>'
         f'<div class="page-title">AI AGENT SOLUTION PATH</div>'
         f'{ai_rows_html}'
         f'</div>'
     )
 
-    # ── Right column: score + step explanations ──────────────────────────────
-    guess_word   = "guess" if n_user == 1 else "guesses"
-    score_banner = (
-        f'<div class="score-banner">'
-        f'You cracked the cipher in {n_user} {guess_word}!'
-        f'</div>'
-    )
-
+    # ── Right column: step-by-step AI explanation ─────────────────────────────
     explain_html = ""
     for i, entry in enumerate(ai_guesses, 1):
         raw_text = explain_step(
@@ -1156,7 +1374,6 @@ def reveal_page() -> None:
 
     right_html = (
         f'<div class="page-right-content fade-in">'
-        f'{score_banner}'
         f'<div class="page-title">STEP-BY-STEP EXPLANATION</div>'
         f'{explain_html}'
         f'</div>'
@@ -1166,12 +1383,13 @@ def reveal_page() -> None:
 
     with col_left:
         st.markdown(left_html, unsafe_allow_html=True)
-
-    with col_right:
-        st.markdown(right_html, unsafe_allow_html=True)
+        st.markdown('<div class="play-again-area"></div>', unsafe_allow_html=True)
         if st.button("PLAY AGAIN", key="play_again"):
             start_game()
             st.rerun()
+
+    with col_right:
+        st.markdown(right_html, unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1181,8 +1399,6 @@ page = st.session_state.get("page", "landing")
 
 if page == "landing":
     landing_page()
-elif page == "instructions":
-    instructions_page()
 elif page == "game":
     game_page()
 elif page == "reveal":

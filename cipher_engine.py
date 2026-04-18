@@ -1,5 +1,5 @@
 """
-Cipher-4 Game Engine
+Cipher Game Engine
 Maximum-Entropy AI solver for 4-digit non-positional feedback game.
 """
 from itertools import permutations

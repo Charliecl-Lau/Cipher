@@ -46,3 +46,7 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Docs
+prd.md
+ui.md

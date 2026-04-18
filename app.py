@@ -569,9 +569,9 @@ html, body,
     height: 0.85rem;
 }}
 
-/* ─── Landing page: dead-center the title+button stack ─── */
-/* :has(.landing-btn-gap) scopes these rules to the landing column only */
-[data-testid="stVerticalBlock"]:has(.landing-btn-gap) {{
+/* ─── Landing page: dead-center the tirules to the landing column only */
+[data-testid="stVerticalBlock"]:htle+button stack ─── */
+/* :has(.landing-btn-gap) scopes these as(.landing-btn-gap) {{
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
@@ -713,8 +713,8 @@ html, body,
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    min-height: 10vh !important;
-    padding: 2.5rem 1rem !important;
+    min-height: 100vh !important;
+    padding: 3rem 1rem !important;
 }}
 
 /* ─── Framed parchment canvas ─── */
@@ -722,7 +722,8 @@ html, body,
     max-width: 1300px !important;
     width: 100% !important;
     margin: 0 auto !important;
-    padding: 3rem 2.5rem !important;
+    padding: 5rem 2.5rem !important;
+    min-height: 72vh !important;
     background-image:
         linear-gradient(rgba(80,55,20,0.11) 1px, transparent 1px),
         linear-gradient(90deg, rgba(80,55,20,0.11) 1px, transparent 1px),
@@ -743,13 +744,13 @@ html, body,
 /* ─── Game title ─── */
 .game-title {{
     font-family: 'Caveat', cursive;
-    font-size: 4.5rem;
+    font-size: 6.5rem;
     font-weight: 700;
     color: #2A1B0A;
     text-align: center;
     letter-spacing: 0.02em;
     line-height: 1.05;
-    margin: 0 0 1.4rem 0;
+    margin: 0 0 2.4rem 0;
     padding: 0;
 }}
 
@@ -761,7 +762,7 @@ html, body,
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
-    min-height: 60vh;
+    min-height: 68vh;
 }}
 
 /* Center each child element */
@@ -1257,6 +1258,7 @@ def landing_page() -> None:
     st.markdown('<div id="start-btn-marker"></div>', unsafe_allow_html=True)
     if st.button("START GAME", key="start_btn"):
         show_intro_dialog()
+    st.markdown('<div class="landing-btn-gap"></div>', unsafe_allow_html=True)
 
 
 
@@ -1353,7 +1355,6 @@ def reveal_page() -> None:
         f'{outcome_txt}<br>'
         f'<span style="font-size:1.25rem;font-weight:500;">{outcome_sub}</span>'
         f'</div>'
-        f'<div class="score-banner">You cracked the cipher in {n_user} {guess_word}!</div>'
         f'<div class="page-title">AI AGENT SOLUTION PATH</div>'
         f'{ai_rows_html}'
         f'</div>'

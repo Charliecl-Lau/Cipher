@@ -382,7 +382,7 @@ div[role="dialog"] {{
 }}
 
 .dialog-title {{
-    font-family: 'Caveat', cursive;
+    font-family: 'Caveat', cursive !important;
     font-size: 2.2rem;
     font-weight: 700;
     color: #1A0E08;
@@ -394,26 +394,25 @@ div[role="dialog"] {{
 }}
 
 .dialog-lore {{
-    font-family: 'Caveat', cursive;
-    font-size: 1.25rem;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.8rem !important;
     color: #1A0E08;
     line-height: 1.65;
     margin-bottom: 1rem;
-    font-style: italic;
     text-align: center;
 }}
 
 .dialog-rules-block {{
-    font-family: 'Caveat', cursive;
-    font-size: 1.15rem;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.5rem !important;
     color: #1A0E08;
     line-height: 1.5;
     margin-bottom: 0.5rem;
 }}
 
 .dialog-question {{
-    font-family: 'Caveat', cursive;
-    font-size: 1.4rem;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.8rem !important;
     font-weight: 700;
     color: #1A0E08;
     text-align: center;
@@ -421,7 +420,6 @@ div[role="dialog"] {{
     margin-bottom: 1rem;
     padding-top: 1rem;
     border-top: 1px dashed rgba(75,50,18,0.35);
-    font-style: italic;
 }}
 
 /* ─── Win / Loss declaration banner ─── */
@@ -679,7 +677,9 @@ html, body,
 }}
 
 .rule-img {{
-    width: 30px;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
     height: 30px;
     object-fit: contain;
     flex-shrink: 0;
@@ -1115,40 +1115,31 @@ def process_user_guess(raw: str) -> bool:
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
 
-@st.dialog("— CIPHER —", width="large")
+@st.dialog(" ", width="large")
 def show_intro_dialog() -> None:
     """Narrative briefing overlay shown after clicking START GAME."""
     st.markdown(
         f'<div class="dialog-title">MISSION BRIEFING</div>'
-        f'<div class="dialog-lore">'
-        f'The year is uncertain. The code is not.<br>'
-        f'Somewhere in the cipher, a four-digit sequence waits —<br>'
-        f'known only to an agent of pure logic.'
         f'</div>'
         f'<div class="dialog-rules-block">'
-        f'<p style="font-size:1.15rem;margin:0 0 0.7rem 0;">Guess the <strong>4-digit secret code</strong>. No repeating digits.</p>'
-        f'<p style="font-size:1.05rem;color:#3A2810;margin:0 0 0.55rem 0;">After each guess you receive colour feedback:</p>'
-        f'<div class="rule-row"><img src="{GREEN_PAINT}" class="rule-img" alt="green">'
+        f'<p style="font-size:1.8rem;font-family:\'Caveat\',cursive !important;margin:0 0 0.7rem 0;">Guess the <strong>4-digit secret code</strong>. No repeating digits.</p>'
+        f'<p style="font-size:1.8rem;font-family:\'Caveat\',cursive !important;color:#3A2810;margin:0 0 0.55rem 0;">After each guess you receive colour feedback:</p>'
+        f'<div class="rule-row" style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;"><img src="{GREEN_PAINT}" style="width:80px;height:80px;object-fit:contain;flex-shrink:0;" alt="green">'
         f'<span><strong>Green</strong> — correct digit &amp; correct position</span></div>'
-        f'<div class="rule-row"><img src="{YELLOW_PAINT}" class="rule-img" alt="yellow">'
+        f'<div class="rule-row" style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;"><img src="{YELLOW_PAINT}" style="width:80px;height:80px;object-fit:contain;flex-shrink:0;" alt="yellow">'
         f'<span><strong>Yellow</strong> — correct digit, wrong position</span></div>'
-        f'<div class="rule-row"><img src="{RED_PAINT}" class="rule-img" alt="red">'
+        f'<div class="rule-row" style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;"><img src="{RED_PAINT}" style="width:80px;height:80px;object-fit:contain;flex-shrink:0;" alt="red">'
         f'<span><strong>Red</strong> — digit not in the code at all</span></div>'
-        f'<p style="font-size:1.0rem;color:#5C3A1A;margin-top:0.8rem;font-style:italic;">'
+        f'<p style="font-size:1.8rem;font-family:\'Caveat\',cursive !important;color:#5C3A1A;">'
         f'Feedback blocks do <em>not</em> show exact digit positions — only counts. '
-        f'No repeated digits. No second chances once you submit.</p>'
-        f'</div>'
-        f'<div class="dialog-lore" style="margin-bottom:0;">'
-        f'Alongside you, the <strong>Entropy Agent</strong> — a mathematical construct '
-        f'running on pure Information Theory — races to the same answer. '
-        f'It never guesses blindly. It never wastes a move.'
+        f'No repeated digits.</p>'
         f'</div>'
         f'<div class="dialog-question">'
         f'Can human intuition beat an Information Theory algorithm?'
         f'</div>',
         unsafe_allow_html=True,
     )
-    if st.button("COMMENCE", key="commence_btn"):
+    if st.button("Start", key="commence_btn"):
         start_game()
         st.rerun()
 

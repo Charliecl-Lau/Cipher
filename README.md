@@ -45,7 +45,6 @@ The core solver uses a **Minimax Algorithm** rooted in Information Theory:
 ### Prerequisites
 
 - Python 3.8+
-- Streamlit
 
 ### Installation
 
@@ -65,6 +64,13 @@ The core solver uses a **Minimax Algorithm** rooted in Information Theory:
    streamlit run app.py
    ```
 
+   If `streamlit` is not on your PATH (common on Windows), use:
+   ```bash
+   python -m streamlit run app.py --server.headless true
+   ```
+
+   The app will be available at **http://localhost:8501**.
+
 ---
 
 ## Project Structure
@@ -82,7 +88,8 @@ Cipher/
 
 ## How to Play
 
-1. **Start** — Click `START GAME` to generate a secret code.
-2. **Guess** — Type 4 unique digits.
-3. **Submit** — Press `Enter` or click `Submit`.
-4. **Compare** — Once you solve the code, the AI Agent reveals its full solution path and explains the mathematical logic behind every move it made.
+1. **Landing** — Click `START GAME` on the parchment landing page.
+2. **Mission Briefing** — A dialog explains the rules and colour feedback system. Click `Start` to begin.
+3. **Game** — Enter your guess using the 4-box digit grid. Each box accepts one unique digit; press `Enter` or click `SUBMIT` after filling all four.
+4. **Feedback** — Each guess shows colour blocks indicating how close you were. The AI makes its own guess simultaneously behind the scenes.
+5. **Result** — Once you crack the code, the ledger opens to reveal the outcome (win or loss), the AI's full solution path, and a step-by-step entropy explanation for every move the AI made. Click `PLAY AGAIN` to start a new round.

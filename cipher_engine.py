@@ -49,6 +49,11 @@ def generate_secret() -> tuple:
     return tuple(random.sample(range(10), 4))
 
 
+def reveal_secret(secret: tuple) -> None:
+    """Print the secret code to the terminal."""
+    print(f"Secret code: {'-'.join(str(d) for d in secret)}")
+
+
 def get_feedback(guess: tuple, secret: tuple) -> tuple:
     """Returns (greens, yellows, reds). Feedback is non-positional (counts only)."""
     gi = PERM_TO_IDX[guess]

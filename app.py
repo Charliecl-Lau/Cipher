@@ -1,11 +1,16 @@
 """
 Cipher — Streamlit front-end (open ledger visual)
 """
+from __future__ import annotations
+import os
 import re
 import json
 import html
 import base64
 from pathlib import Path
+
+# Suppress gRPC/ALTS noise printed to stderr by the google-genai native layer
+os.environ.setdefault("GRPC_VERBOSITY", "NONE")
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -847,6 +852,131 @@ html, body,
 </style>
 """
 
+# ── Post-game analysis page extras ────────────────────────────────────────────
+CSS_ANALYSIS = """
+<style>
+/* ─── Column padding on the open-ledger reveal page ─── */
+[data-testid="stColumn"] > div:first-child {
+    padding: 2.5rem 2.2rem 2rem !important;
+}
+
+/* ─── Path Toggle: strip radio chrome, render as tab underlines ─── */
+div[data-testid="stRadio"] {
+    margin: 0 0 1.1rem 0 !important;
+}
+
+/* options row */
+div[data-testid="stRadio"] > div {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0 !important;
+    border-bottom: 1.5px solid rgba(75,50,18,0.22) !important;
+    padding-bottom: 0 !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+}
+
+/* each option label */
+div[data-testid="stRadio"] > div > label {
+    display: flex !important;
+    align-items: center !important;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.55rem !important;
+    font-weight: 600 !important;
+    color: #8A7050 !important;
+    cursor: pointer !important;
+    padding: 0.12rem 1.2rem 0.48rem !important;
+    border-bottom: 2.5px solid transparent !important;
+    margin-bottom: -1.5px !important;
+    transition: color 0.12s ease, border-color 0.12s ease !important;
+    background: transparent !important;
+    user-select: none !important;
+}
+
+div[data-testid="stRadio"] > div > label:hover {
+    color: #3A2810 !important;
+}
+
+/* active (checked) tab */
+div[data-testid="stRadio"] > div > label:has(input:checked) {
+    color: #1A0E08 !important;
+    border-bottom-color: #2A1B0A !important;
+}
+
+/* hide the actual radio circle dot */
+div[data-testid="stRadio"] input[type="radio"] {
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    pointer-events: none !important;
+}
+
+div[data-testid="stRadio"] > div > label > div:first-child {
+    display: none !important;
+}
+
+/* label text */
+div[data-testid="stRadio"] > div > label p {
+    margin: 0 !important;
+    font-family: 'Caveat', cursive !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    color: #000000 !important;
+}
+
+/* ─── Coach's Notes analysis card ─── */
+.analysis-headline {
+    font-family: 'Caveat', cursive;
+    font-size: 2.15rem;
+    font-weight: 700;
+    color: #1A0E08;
+    margin-bottom: 0.75rem;
+    line-height: 1.2;
+    border-bottom: 1.5px solid rgba(75,50,18,0.25);
+    padding-bottom: 0.55rem;
+    letter-spacing: 0.02em;
+}
+
+.analysis-body {
+    font-family: 'Caveat', cursive;
+    font-size: 1.55rem;
+    color: #2A1B0A;
+    line-height: 1.72;
+}
+
+/* ─── Spinner text ─── */
+[data-testid="stSpinner"] p {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.25rem !important;
+    color: #5C3A1A !important;
+}
+
+/* ─── Invisible scroll container for guess list ─── */
+.guess-scroll-container {
+    max-height: 450px;
+    overflow-y: auto;
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
+}
+
+/* Hide scrollbar — Webkit */
+.guess-scroll-container::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar — Firefox */
+.guess-scroll-container {
+    scrollbar-width: none;
+}
+
+/* Hide scrollbar — IE/Edge */
+.guess-scroll-container {
+    -ms-overflow-style: none;
+}
+</style>
+"""
+
 # ── Flat seamless parchment + memo pad — active game page only ─────────────────
 CSS_GAME_BG = f"""
 <style>
@@ -1076,7 +1206,6 @@ def init_state() -> None:
 
 def start_game() -> None:
     st.session_state.secret        = generate_secret()
-    print(f"DEBUG — Correct Answer: {st.session_state.secret}")
     st.session_state.user_guesses  = []
     st.session_state.ai_guesses    = []
     st.session_state.ai_candidates = ALL_INDICES.copy()
@@ -1456,105 +1585,103 @@ def get_llm_analysis() -> dict:
 def reveal_page() -> None:
     st.markdown(CSS_BASE + CSS_BOOK_BG + CSS_ANALYSIS, unsafe_allow_html=True)
 
-    # ── Pre-compute the complete AI game path (cached after first run) ────────
-    precompute_ai_full_game()       # warms session_state["ai_full_path"] for get_llm_analysis()
-    precompute_user_path_stats()    # warms session_state["user_path_stats"] for get_llm_analysis()
+
+    # ── Pre-compute paths (cached after first run) ────────────────────────────
+    precompute_ai_full_game()       # warms session_state["ai_full_path"]
+    precompute_user_path_stats()    # warms session_state["user_path_stats"]
+    ai_full_path = st.session_state.ai_full_path
     user_guesses = st.session_state.user_guesses
-
-    ai_guesses   = st.session_state.ai_guesses
     n_user       = len(user_guesses)
-    n_ai         = len(ai_guesses)
+    n_ai         = len(ai_full_path)
 
-    # ── Win / loss determination ──────────────────────────────────────────────
-    user_won     = n_user <= n_ai
-    outcome_cls  = "win"  if user_won else "lose"
-    outcome_txt  = "You Win!" if user_won else "The AI Wins."
-    outcome_sub  = (
-        f"You solved it in {n_user} {'guess' if n_user == 1 else 'guesses'} — "
-        f"the AI needed {n_ai}."
-        if user_won else
-        f"You needed {n_user} {'guess' if n_user == 1 else 'guesses'} — "
-        f"the AI solved it in {n_ai}."
-    )
-
-    # ── AI solution path rows ─────────────────────────────────────────────────
-    ai_rows_html = ""
-    for i, entry in enumerate(ai_guesses, 1):
-        g, y, r     = entry["feedback"]
-        digits      = "-".join(str(d) for d in entry["guess"])
-        solved_span = '<span class="ai-solved-txt">Solved!</span>' if entry["feedback"] == (4, 0, 0) else ""
-        ai_rows_html += (
-            f'<div class="ai-row">'
-            f'<span class="ai-row-num">{i}.</span>'
-            f'<span class="ai-row-digits">{digits}</span>'
-            f'{solved_span}'
-            f'<div class="guess-blocks">{blocks_html(g, y, r)}</div>'
-            f'</div>'
-        )
-
-    # ── Left column: win/loss + user steps + AI path + Play Again ────────────
-    guess_word = "guess" if n_user == 1 else "guesses"
-    left_html = (
-        f'<div class="page-left-content fade-in">'
-        f'<div class="win-loss-banner {outcome_cls}">'
-        f'{outcome_txt}<br>'
-        f'<span style="font-size:1.25rem;font-weight:500;">{outcome_sub}</span>'
-        f'</div>'
-        f'<div class="page-title">AI AGENT SOLUTION PATH</div>'
-        f'{ai_rows_html}'
-        f'</div>'
-    )
-
-    # ── Right column: step-by-step AI explanation ─────────────────────────────
-    explain_html = ""
-    for i, entry in enumerate(ai_guesses, 1):
-        raw_text = explain_step(
-            step=i,
-            guess=entry["guess"],
-            feedback=entry["feedback"],
-            cands_before=entry["cands_before"],
-            cands_after=entry["cands_after"],
-            entropy_bits=entry["entropy"],
-        )
-        explain_html += f'<div class="explain-entry">{md_bold(raw_text)}</div>'
-
-    right_html = (
-        f'<div class="page-right-content fade-in">'
-        f'<div class="page-title">STEP-BY-STEP EXPLANATION</div>'
-        f'{explain_html}'
-        f'</div>'
-    )
+    # ── Win / loss ────────────────────────────────────────────────────────────
+    user_won    = n_user <= n_ai
+    outcome_cls = "win"  if user_won else "lose"
+    outcome_txt = "You Win!" if user_won else "The AI Wins."
+    outcome_sub = f"You: {n_user} guesses · AI: {n_ai} guesses"
 
     col_left, col_right = st.columns(2)
 
+    # ── LEFT COLUMN — toggle + guess list ────────────────────────────────────
     with col_left:
-        st.markdown(left_html, unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="win-loss-banner {outcome_cls} fade-in">'
+            f'{outcome_txt}<br>'
+            f'<span style="font-size:1.25rem;font-weight:500;">{outcome_sub}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        view = st.radio(
+            "View",
+            options=["Your Path", "Perfect Path"],
+            horizontal=True,
+            key="path_toggle",
+            label_visibility="collapsed",
+        )
+
+        if view == "Your Path":
+            title     = f"YOUR PATH — {n_user} {'GUESS' if n_user == 1 else 'GUESSES'}"
+            rows_html = "".join(
+                guess_row_html(i + 1, g, f, solved=(f == (4, 0, 0)))
+                for i, (g, f) in enumerate(user_guesses)
+            )
+        else:
+            title     = f"PERFECT PATH — {n_ai} {'GUESS' if n_ai == 1 else 'GUESSES'}"
+            rows_html = "".join(
+                guess_row_html(
+                    i + 1,
+                    e["guess"],
+                    e["feedback"],
+                    solved=(e["feedback"] == (4, 0, 0)),
+                )
+                for i, e in enumerate(ai_full_path)
+            )
+
+        active_count = n_user if view == "Your Path" else n_ai
+        st.markdown(
+            f'<div class="page-title fade-in">{title}</div>'
+            f'<div class="guess-scroll-container fade-in">{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
+        if active_count > 7:
+            st.markdown(
+                '<div style="font-family:\'Caveat\',cursive;font-size:1.1rem;'
+                'color:rgba(0,0,0,0.5);text-align:center;margin-top:0.2rem;">'
+                '(scroll to see more) ↓</div>',
+                unsafe_allow_html=True,
+            )
+
         st.markdown('<div class="play-again-area"></div>', unsafe_allow_html=True)
         if st.button("PLAY AGAIN", key="play_again"):
             start_game()
             st.rerun()
 
+    # ── RIGHT COLUMN — LLM coach analysis ────────────────────────────────────
     with col_right:
-        st.markdown(right_html, unsafe_allow_html=True)
-
-        # Trigger the API call exactly once; spinner shows during the request
         if "llm_analysis" not in st.session_state:
             with st.spinner("Analysing your gameplay..."):
                 get_llm_analysis()
 
-        analysis = st.session_state.get("llm_analysis", {})
-        headline  = html.escape(analysis.get("headline", ""))
-        bullets   = [html.escape(b) for b in analysis.get("bullets", [])]
+        analysis    = st.session_state.get("llm_analysis", {})
+        headline    = html.escape(analysis.get("headline", ""))
+        bullets     = [html.escape(b) for b in analysis.get("bullets", [])]
         bullet_html = "".join(
             f'<div class="analysis-bullet fade-in">{i + 1}. {b}</div>'
             for i, b in enumerate(bullets)
         )
-        if headline or bullets:
-            st.markdown(
-                f'<div class="analysis-headline fade-in">{headline}</div>'
-                f'{bullet_html}',
-                unsafe_allow_html=True,
-            )
+        analysis_html = (
+            f'<div class="analysis-headline fade-in">{headline}</div>'
+            f'{bullet_html}'
+            if (headline or bullets) else ""
+        )
+        st.markdown(
+            f'<div class="page-right-content fade-in">'
+            f'<div class="page-title">COACH\'S NOTES</div>'
+            f'{analysis_html}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
         err = st.session_state.get("llm_analysis_error", "")
         if err:
             st.error(err)

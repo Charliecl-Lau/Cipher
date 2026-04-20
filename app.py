@@ -1060,9 +1060,10 @@ def start_game() -> None:
     st.session_state.input_error   = ""
     st.session_state.page          = "game"
     # Clear post-game caches so they recompute fresh next round
-    st.session_state.pop("ai_full_path",    None)
-    st.session_state.pop("llm_analysis",    None)
-    st.session_state.pop("user_path_stats", None)
+    st.session_state.pop("ai_full_path",        None)
+    st.session_state.pop("llm_analysis",        None)
+    st.session_state.pop("llm_analysis_error",  None)
+    st.session_state.pop("user_path_stats",     None)
 
 
 def run_ai_step() -> None:
@@ -1359,38 +1360,38 @@ def get_llm_analysis() -> dict:
 
     user_path_stats = st.session_state.user_path_stats
     ai_full_path    = st.session_state.ai_full_path
-    payload         = build_llm_payload(user_path_stats, ai_full_path)
-
-    has_struggle  = "struggleMove" in payload
-    struggle_note = (
-        ""
-        if has_struggle
-        else " (struggleMove absent — replace Bullet 2 with a second compliment)"
-    )
-
-    system_prompt = (
-        "[ROLE]\n"
-        "You are a sharp, friendly game coach analysing a code-breaking puzzle. "
-        "Speak like a person, not a textbook.\n\n"
-        "[RULES]\n"
-        "- Never use: entropy, minimax, algorithm, search space, heuristic, optimal\n"
-        "- Use instead: ruled out, narrowed down, options left, possibilities\n"
-        "- Each bullet must be under 20 words\n"
-        '- Return ONLY a raw JSON object: {"headline": string, "bullets": [string, string, string]}\n'
-        "- The very first character of your response must be {\n\n"
-        "[DATA]\n"
-        f"{json.dumps(payload, indent=2)}\n\n"
-        "[TASK]\n"
-        f"Write a headline (3–7 words) and exactly 3 bullets{struggle_note}:\n"
-        "  Bullet 1 → strongMove highlight\n"
-        "  Bullet 2 → struggleMove critique\n"
-        "  Bullet 3 → performanceTier-calibrated takeaway:\n"
-        "    efficient  → open with a compliment, give one sharpening tip\n"
-        "    average    → encouraging but direct, name one habit to build\n"
-        "    struggling → honest but kind, name one thing costing them turns"
-    )
 
     try:
+        payload       = build_llm_payload(user_path_stats, ai_full_path)
+        has_struggle  = "struggleMove" in payload
+        struggle_note = (
+            ""
+            if has_struggle
+            else " (struggleMove absent — replace Bullet 2 with a second compliment)"
+        )
+
+        system_prompt = (
+            "[ROLE]\n"
+            "You are a sharp, friendly game coach analysing a code-breaking puzzle. "
+            "Speak like a person, not a textbook.\n\n"
+            "[RULES]\n"
+            "- Never use: entropy, minimax, algorithm, search space, heuristic, optimal\n"
+            "- Use instead: ruled out, narrowed down, options left, possibilities\n"
+            "- Each bullet must be under 20 words\n"
+            '- Return ONLY a raw JSON object: {"headline": string, "bullets": [string, string, string]}\n'
+            "- The very first character of your response must be {\n\n"
+            "[DATA]\n"
+            f"{json.dumps(payload, indent=2)}\n\n"
+            "[TASK]\n"
+            f"Write a headline (3–7 words) and exactly 3 bullets{struggle_note}:\n"
+            "  Bullet 1 → strongMove highlight\n"
+            "  Bullet 2 → struggleMove critique\n"
+            "  Bullet 3 → performanceTier-calibrated takeaway:\n"
+            "    efficient  → open with a compliment, give one sharpening tip\n"
+            "    average    → encouraging but direct, name one habit to build\n"
+            "    struggling → honest but kind, name one thing costing them turns"
+        )
+
         from google import genai
         from google.genai import types
 
@@ -1418,8 +1419,8 @@ def get_llm_analysis() -> dict:
         fallback: dict = {
             "headline": "Analysis unavailable",
             "bullets": [
-                f"You solved it in {payload['userStepCount']} guesses.",
-                f"The perfect path was {payload['perfectStepCount']} guesses.",
+                f"You solved it in {len(user_path_stats)} guesses.",
+                f"The perfect path was {len(ai_full_path)} guesses.",
                 "Try again to see a detailed breakdown.",
             ],
         }

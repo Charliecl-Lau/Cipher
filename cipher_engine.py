@@ -126,3 +126,71 @@ def explain_step(step: int, guess: tuple, feedback: tuple,
         space = f"Search space: {cands_before:,} → {cands_after:,} ({pct:.0f}% reduction)."
 
     return f"**Guess {step} ({gs}):** {method} Result: {result} {space}"
+
+
+def build_llm_payload(user_path_stats: list, ai_full_path: list) -> dict:
+    """
+    Build the enriched JSON payload for the LLM coaching prompt.
+    All structural decisions (tier, percentages, strong/weak move) are made
+    here in Python — the LLM's only job is vocabulary and phrasing.
+
+    Args:
+        user_path_stats: list of dicts from precompute_user_path_stats(),
+            each with keys: guess, feedback, cands_before, cands_after.
+        ai_full_path: list of dicts from precompute_ai_full_game(),
+            each with keys: guess, feedback, cands_before, cands_after, entropy.
+
+    Returns:
+        dict with keys: userStepCount, perfectStepCount, efficiencyRating,
+        performanceTier, strongMove, and optionally struggleMove.
+    """
+    user_steps    = len(user_path_stats)
+    perfect_steps = len(ai_full_path)
+    delta         = user_steps - perfect_steps
+
+    if delta <= 1:
+        tier = "efficient"
+    elif delta <= 3:
+        tier = "average"
+    else:
+        tier = "struggling"
+
+    efficiency = round(perfect_steps / user_steps * 100) if user_steps > 0 else 100
+
+    # Annotate each step with eliminated count and percentage of total space
+    annotated = [
+        {
+            "guessNumber":      i + 1,
+            "guess":            "-".join(str(d) for d in s["guess"]),
+            "eliminated_count": s["cands_before"] - s["cands_after"],
+            "eliminated_pct":   round((s["cands_before"] - s["cands_after"]) / 5040 * 100),
+        }
+        for i, s in enumerate(user_path_stats)
+    ]
+
+    # strongMove: highest eliminated_count across all guesses
+    strong = max(annotated, key=lambda s: s["eliminated_count"])
+
+    # struggleMove: lowest eliminated_count among non-final guesses that are
+    # not the same step as strongMove (avoid double-counting short games)
+    non_final_excl_strong = [
+        s for s in annotated[:-1]
+        if s["guessNumber"] != strong["guessNumber"]
+    ]
+    struggle = (
+        min(non_final_excl_strong, key=lambda s: s["eliminated_count"])
+        if non_final_excl_strong
+        else None
+    )
+
+    payload: dict = {
+        "userStepCount":    user_steps,
+        "perfectStepCount": perfect_steps,
+        "efficiencyRating": efficiency,
+        "performanceTier":  tier,
+        "strongMove":       strong,
+    }
+    if struggle:
+        payload["struggleMove"] = struggle
+
+    return payload

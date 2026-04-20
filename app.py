@@ -3,6 +3,7 @@ Cipher — Streamlit front-end (open ledger visual)
 """
 import re
 import json
+import html
 import base64
 from pathlib import Path
 
@@ -1542,17 +1543,18 @@ def reveal_page() -> None:
                 get_llm_analysis()
 
         analysis = st.session_state.get("llm_analysis", {})
-        headline  = analysis.get("headline", "")
-        bullets   = analysis.get("bullets", [])
+        headline  = html.escape(analysis.get("headline", ""))
+        bullets   = [html.escape(b) for b in analysis.get("bullets", [])]
         bullet_html = "".join(
             f'<div class="analysis-bullet fade-in">{i + 1}. {b}</div>'
             for i, b in enumerate(bullets)
         )
-        st.markdown(
-            f'<div class="analysis-headline fade-in">{headline}</div>'
-            f'{bullet_html}',
-            unsafe_allow_html=True,
-        )
+        if headline or bullets:
+            st.markdown(
+                f'<div class="analysis-headline fade-in">{headline}</div>'
+                f'{bullet_html}',
+                unsafe_allow_html=True,
+            )
         err = st.session_state.get("llm_analysis_error", "")
         if err:
             st.error(err)

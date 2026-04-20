@@ -1316,7 +1316,7 @@ def precompute_ai_full_game() -> list:
     if "ai_full_path" in st.session_state:
         return st.session_state.ai_full_path
 
-    st.session_state.ai_full_path = st.session_state.ai_guesses
+    st.session_state.ai_full_path = list(st.session_state.ai_guesses)
     return st.session_state.ai_full_path
 
 
@@ -1351,8 +1351,8 @@ def reveal_page() -> None:
     st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
 
     # ── Pre-compute the complete AI game path (cached after first run) ────────
-    ai_full_path = precompute_ai_full_game()
-    precompute_user_path_stats()          # caches to session_state["user_path_stats"]
+    ai_full_path     = precompute_ai_full_game()
+    user_path_stats  = precompute_user_path_stats()
     user_guesses = st.session_state.user_guesses
 
     ai_guesses   = st.session_state.ai_guesses

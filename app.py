@@ -700,6 +700,30 @@ html, body,
 </style>
 """
 
+# ── Coach analysis panel — reveal page ───────────────────────────────────────
+CSS_ANALYSIS = """
+<style>
+/* ─── Coach headline ─── */
+.analysis-headline {
+    font-family: 'Caveat', cursive;
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: #2A1B0A;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+}
+
+/* ─── Numbered coach bullet ─── */
+.analysis-bullet {
+    font-family: 'Caveat', cursive;
+    font-size: 1.55rem;
+    color: #2A1B0A;
+    line-height: 1.72;
+    margin-bottom: 0.75rem;
+}
+</style>
+"""
+
 # ── Flat parchment — landing page ──────────────────────────────────────────────
 CSS_LANDING_BG = f"""
 <style>
@@ -1429,7 +1453,7 @@ def get_llm_analysis() -> dict:
 
 
 def reveal_page() -> None:
-    st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
+    st.markdown(CSS_BASE + CSS_BOOK_BG + CSS_ANALYSIS, unsafe_allow_html=True)
 
     # ── Pre-compute the complete AI game path (cached after first run) ────────
     precompute_ai_full_game()       # warms session_state["ai_full_path"] for get_llm_analysis()
@@ -1511,6 +1535,27 @@ def reveal_page() -> None:
 
     with col_right:
         st.markdown(right_html, unsafe_allow_html=True)
+
+        # Trigger the API call exactly once; spinner shows during the request
+        if "llm_analysis" not in st.session_state:
+            with st.spinner("Analysing your gameplay..."):
+                get_llm_analysis()
+
+        analysis = st.session_state.get("llm_analysis", {})
+        headline  = analysis.get("headline", "")
+        bullets   = analysis.get("bullets", [])
+        bullet_html = "".join(
+            f'<div class="analysis-bullet fade-in">{i + 1}. {b}</div>'
+            for i, b in enumerate(bullets)
+        )
+        st.markdown(
+            f'<div class="analysis-headline fade-in">{headline}</div>'
+            f'{bullet_html}',
+            unsafe_allow_html=True,
+        )
+        err = st.session_state.get("llm_analysis_error", "")
+        if err:
+            st.error(err)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -1351,8 +1351,8 @@ def reveal_page() -> None:
     st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
 
     # ── Pre-compute the complete AI game path (cached after first run) ────────
-    ai_full_path     = precompute_ai_full_game()
-    user_path_stats  = precompute_user_path_stats()
+    precompute_ai_full_game()       # warms session_state["ai_full_path"] for get_llm_analysis()
+    precompute_user_path_stats()    # warms session_state["user_path_stats"] for get_llm_analysis()
     user_guesses = st.session_state.user_guesses
 
     ai_guesses   = st.session_state.ai_guesses

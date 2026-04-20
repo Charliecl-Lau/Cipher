@@ -50,3 +50,6 @@ Thumbs.db
 # Docs
 prd.md
 ui.md
+
+# Worktrees
+worktrees/

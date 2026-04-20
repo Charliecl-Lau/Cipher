@@ -51,5 +51,8 @@ Thumbs.db
 prd.md
 ui.md
 
+# Tests
+tests/
+
 # Worktrees
 worktrees/

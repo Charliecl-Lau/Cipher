@@ -12,6 +12,7 @@ from cipher_engine import (
     ALL_INDICES, FIRST_GUESS,
     generate_secret, get_feedback,
     filter_candidates, best_guess, explain_step,
+    build_llm_payload,
 )
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -1057,6 +1058,10 @@ def start_game() -> None:
     st.session_state.ai_entropy    = 0.0
     st.session_state.input_error   = ""
     st.session_state.page          = "game"
+    # Clear post-game caches so they recompute fresh next round
+    st.session_state.pop("ai_full_path",    None)
+    st.session_state.pop("llm_analysis",    None)
+    st.session_state.pop("user_path_stats", None)
 
 
 def run_ai_step() -> None:
@@ -1303,11 +1308,54 @@ def game_page() -> None:
         )
 
 
+def precompute_ai_full_game() -> list:
+    """
+    Return the AI's recorded guess path, caching it in session_state so
+    downstream callers always get the same list object within a session.
+    """
+    if "ai_full_path" in st.session_state:
+        return st.session_state.ai_full_path
+
+    st.session_state.ai_full_path = st.session_state.ai_guesses
+    return st.session_state.ai_full_path
+
+
+def precompute_user_path_stats() -> list:
+    """
+    Replay user_guesses through filter_candidates to compute candidate
+    counts before/after each user guess. Mirrors precompute_ai_full_game()
+    but follows the user's actual sequence. Cached in session_state.
+    """
+    if "user_path_stats" in st.session_state:
+        return st.session_state.user_path_stats
+
+    user_guesses = st.session_state.user_guesses
+    candidates   = ALL_INDICES.copy()
+    path: list   = []
+
+    for guess, feedback in user_guesses:
+        cands_before = len(candidates)
+        candidates   = filter_candidates(candidates, guess, feedback)
+        path.append({
+            "guess":        guess,
+            "feedback":     feedback,
+            "cands_before": cands_before,
+            "cands_after":  len(candidates),
+        })
+
+    st.session_state.user_path_stats = path
+    return path
+
+
 def reveal_page() -> None:
     st.markdown(CSS_BASE + CSS_BOOK_BG, unsafe_allow_html=True)
 
-    ai_guesses   = st.session_state.ai_guesses
+    # ── Pre-compute the complete AI game path (cached after first run) ────────
+    ai_full_path = precompute_ai_full_game()
+    precompute_user_path_stats()          # caches to session_state["user_path_stats"]
     user_guesses = st.session_state.user_guesses
+
+    ai_guesses   = st.session_state.ai_guesses
     n_user       = len(user_guesses)
     n_ai         = len(ai_guesses)
 

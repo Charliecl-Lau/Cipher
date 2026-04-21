@@ -866,18 +866,29 @@ div[data-testid="stRadio"] > div > label p {
     font-size: 2.15rem;
     font-weight: 700;
     color: #1A0E08;
+    text-align: center;
     margin-bottom: 0.75rem;
     line-height: 1.2;
     border-bottom: 1.5px solid rgba(75,50,18,0.25);
     padding-bottom: 0.55rem;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
 }
 
-.analysis-body {
+.analysis-bullet {
     font-family: 'Caveat', cursive;
-    font-size: 1.55rem;
+    font-size: 1.40rem;
+    font-weight: 500;
     color: #2A1B0A;
-    line-height: 1.72;
+    line-height: 1.65;
+    margin-bottom: 0.7rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(75,50,18,0.13);
+    letter-spacing: 0.01em;
+}
+
+.analysis-bullet:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
 }
 
 /* ─── Spinner text ─── */

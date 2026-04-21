@@ -20,32 +20,40 @@ def get_llm_analysis() -> dict:
     try:
         payload       = build_llm_payload(user_path_stats, ai_full_path)
         has_struggle  = "struggleMove" in payload
-        struggle_note = (
-            ""
-            if has_struggle
-            else " (struggleMove absent — replace Bullet 2 with a second compliment)"
-        )
 
         system_prompt = (
-            "[ROLE]\n"
             "You are a sharp, friendly game coach analysing a code-breaking puzzle. "
-            "Speak like a person, not a textbook.\n\n"
+            "Talk like a coach to a player — direct, specific, human.\n\n"
             "[RULES]\n"
-            "- Never use: entropy, minimax, algorithm, search space, heuristic, optimal\n"
+            "- Banned words: entropy, minimax, algorithm, search space, heuristic, optimal\n"
             "- Use instead: ruled out, narrowed down, options left, possibilities\n"
-            "- Each bullet must be 2–3 sentences (roughly 30–60 words)\n"
-            '- Return ONLY a raw JSON object: {"headline": string, "bullets": [string, string, string]}\n'
+            "- Each bullet: exactly 2–3 sentences, 30–60 words. "
+            "Count the words. If a bullet exceeds 60 words, rewrite it before responding.\n"
+            "- Do NOT include the bullet label (e.g. 'The Best Move:') inside the string value.\n"
+            '- Return ONLY a raw JSON object — no markdown fences, no extra keys:\n'
+            '  {"headline": string, "bullets": [string, string, string]}\n'
             "- The very first character of your response must be {\n\n"
             "[DATA]\n"
             f"{json.dumps(payload, indent=2)}\n\n"
             "[TASK]\n"
-            f"Write a headline (3–7 words) and exactly 3 bullets{struggle_note}:\n"
-            "  Bullet 1 → strongMove highlight\n"
-            "  Bullet 2 → struggleMove critique\n"
-            "  Bullet 3 → performanceTier-calibrated takeaway:\n"
-            "    efficient  → open with a compliment, give one sharpening tip\n"
-            "    average    → encouraging but direct, name one habit to build\n"
-            "    struggling → honest but kind, name one thing costing them turns"
+            "Write a headline (3–7 words) and exactly 3 bullets:\n\n"
+            "  Bullet 1 — The Best Move:\n"
+            "    Use `strongMove`. State exactly how many possibilities it ruled out\n"
+            "    and why that guess was the turning point.\n\n"
+            "  Bullet 2 — The Weak Move:\n"
+            + (
+                "    Use `struggleMove`. Explain the specific lapse — did it test something already ruled out,\n"
+                "    or did it barely narrow the remaining options? Name the wasted potential concretely.\n"
+                if has_struggle else
+                "    No `struggleMove` this game — the player avoided any clear weak guess.\n"
+                "    Highlight a second strong decision the player made, with a specific detail.\n"
+            )
+            + "\n"
+            "  Bullet 3 — Takeaway (use `performanceTier` from the data to pick one branch):\n"
+            "    efficient  → open with a compliment, then give one concrete tip for cross-referencing\n"
+            "                  clues to eliminate the last few options without guessing blindly\n"
+            "    average    → encouraging but direct; name one specific habit that would cut a guess off\n"
+            "    struggling → honest but kind; name the one thing costing them the most turns"
         )
 
         from google import genai
@@ -55,7 +63,7 @@ def get_llm_analysis() -> dict:
         response = client.models.generate_content(
             model="gemma-3-27b-it",
             contents=system_prompt,
-            config=types.GenerateContentConfig(max_output_tokens=700),
+            config=types.GenerateContentConfig(max_output_tokens=950),
         )
 
         raw = response.text.strip()
@@ -65,7 +73,7 @@ def get_llm_analysis() -> dict:
 
         assert isinstance(result["headline"], str) and 3 <= len(result["headline"].split()) <= 7
         assert len(result["bullets"]) == 3
-        assert all(len(b.split()) <= 80 for b in result["bullets"])
+        assert all(len(b.split()) <= 65 for b in result["bullets"])
 
         st.session_state.llm_analysis = result
         return result

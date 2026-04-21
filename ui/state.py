@@ -3,7 +3,7 @@ import streamlit as st
 from cipher_engine import (
     ALL_INDICES, FIRST_GUESS,
     generate_secret, get_feedback,
-    filter_candidates, best_guess,
+    filter_candidates, best_guess, reveal_secret,
 )
 
 
@@ -14,6 +14,7 @@ def init_state() -> None:
 
 def start_game() -> None:
     st.session_state.secret        = generate_secret()
+    reveal_secret(st.session_state.secret)
     st.session_state.user_guesses  = []
     st.session_state.ai_guesses    = []
     st.session_state.ai_candidates = ALL_INDICES.copy()

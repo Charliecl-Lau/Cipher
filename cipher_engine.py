@@ -173,8 +173,11 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list) -> dict:
         for i, s in enumerate(user_path_stats)
     ]
 
-    # strongMove: highest eliminated_count across all guesses
-    strong = max(annotated, key=lambda s: s["eliminated_count"])
+    # strongMove: highest eliminated_count, skipping the opening guess (guess 1)
+    # so the LLM highlights a mid-game turning point, not a standard opener.
+    # Fall back to all guesses only if there is just one guess total.
+    post_opening = [s for s in annotated if s["guessNumber"] != 1]
+    strong = max(post_opening or annotated, key=lambda s: s["eliminated_count"])
 
     # struggleMove: lowest eliminated_count among non-final guesses that are
     # not the same step as strongMove (avoid double-counting short games)

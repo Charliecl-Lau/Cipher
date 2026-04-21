@@ -32,11 +32,12 @@ The UI is designed to feel like a physical desk.
 
 ## The AI: "The Entropy Agent"
 
-The core solver uses a **Minimax Algorithm** rooted in Information Theory:
+The core solver uses a **Maximum Entropy** strategy rooted in Information Theory:
 
-1. **Possibility Mapping** — The AI maintains a list of all 5,040 valid permutations.
-2. **Entropy Calculation** — For every potential guess, the AI simulates all possible feedback outcomes (combinations of Green/Yellow/Red) and calculates how much each would narrow down the remaining possibilities.
-3. **Maximized Gain** — The AI selects the guess that guarantees the largest reduction in the search space, even in the worst-case scenario.
+1. **Possibility Mapping** — The AI maintains a list of all 5,040 valid permutations (4-digit sequences with no repeated digits), pre-computed at startup into a feedback lookup table.
+2. **Entropy Calculation** — For every potential guess, the AI simulates all possible feedback outcomes (combinations of Green/Yellow/Red) and computes the Shannon entropy of the resulting distribution.
+3. **Maximized Information Gain** — The AI selects the guess that yields the highest expected information gain, minimising the remaining search space as fast as possible.
+4. **Post-game Coaching** — After each game, a Gemini LLM (gemma-3-27b-it) analyses your moves against the AI's perfect path and delivers personalised coaching feedback.
 
 ---
 
@@ -77,11 +78,23 @@ The core solver uses a **Minimax Algorithm** rooted in Information Theory:
 
 ```
 Cipher/
-├── app.py              # Main Streamlit application and UI logic
-├── cipher_engine.py    # Minimax/Entropy AI logic
-├── image/              # Custom UI assets (parchment, paint, memo textures)
-├── requirements.txt    # Project dependencies
-└── README.md           # You are here
+├── app.py                   # Entry point — page config + routing (~30 lines)
+├── cipher_engine.py         # Maximum-entropy AI solver (Shannon entropy, 5040-perm table)
+├── ui/
+│   ├── assets.py            # Base64 image loader + constants (TEXTURE, paint swatches)
+│   ├── styles.py            # All CSS constants (CSS_BASE, CSS_GAME_BG, etc.)
+│   ├── components.py        # HTML/JS helpers (blocks_html, digit_input_component, …)
+│   ├── state.py             # Session-state helpers (init_state, start_game, …)
+│   └── pages/
+│       ├── landing.py       # Landing page + mission briefing dialog
+│       ├── game.py          # Active gameplay page
+│       └── reveal.py        # Results, path comparison, AI coaching
+├── services/
+│   └── llm.py               # Gemini API call (gemma-3-27b-it) for post-game coaching
+├── image/                   # Custom UI assets (parchment, paint, memo textures)
+├── tests/                   # pytest unit tests
+├── requirements.txt         # Project dependencies
+└── README.md                # You are here
 ```
 
 ---
@@ -92,4 +105,4 @@ Cipher/
 2. **Mission Briefing** — A dialog explains the rules and colour feedback system. Click `Start` to begin.
 3. **Game** — Enter your guess using the 4-box digit grid. Each box accepts one unique digit; press `Enter` or click `SUBMIT` after filling all four.
 4. **Feedback** — Each guess shows colour blocks indicating how close you were. The AI makes its own guess simultaneously behind the scenes.
-5. **Result** — Once you crack the code, the ledger opens to reveal the outcome (win or loss), the AI's full solution path, and a step-by-step entropy explanation for every move the AI made. Click `PLAY AGAIN` to start a new round.
+5. **Result** — Once you crack the code, the ledger opens to reveal the outcome (win or loss), a toggle between your path and the AI's perfect path, and personalised coaching notes from an LLM analysing your strongest and weakest moves. Click `PLAY AGAIN` to start a new round.

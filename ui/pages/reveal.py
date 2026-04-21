@@ -1,7 +1,7 @@
 from __future__ import annotations
 import html
 import streamlit as st
-from cipher_engine import ALL_INDICES, filter_candidates
+from cipher_engine import ALL_INDICES, filter_candidates, reveal_secret
 from ui.styles import CSS_BASE, CSS_BOOK_BG, CSS_ANALYSIS
 from ui.components import guess_row_html
 from ui.state import start_game
@@ -49,6 +49,7 @@ def precompute_user_path_stats() -> list:
 
 def reveal_page() -> None:
     st.markdown(CSS_BASE + CSS_BOOK_BG + CSS_ANALYSIS, unsafe_allow_html=True)
+    reveal_secret(st.session_state.secret)
 
 
     # ── Pre-compute paths (cached after first run) ────────────────────────────

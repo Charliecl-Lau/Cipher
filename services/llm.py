@@ -18,8 +18,12 @@ def get_llm_analysis() -> dict:
     ai_full_path    = st.session_state.ai_full_path
 
     try:
-        payload       = build_llm_payload(user_path_stats, ai_full_path)
-        has_struggle  = "struggleMove" in payload
+        payload = build_llm_payload(
+            user_path_stats, ai_full_path,
+            user_guesses=st.session_state.user_guesses,
+            secret=st.session_state.secret,
+        )
+        has_flag = payload.get("logicFlag") is not None
 
         system_prompt = (
             "You are a sharp, friendly game coach analysing a code-breaking puzzle. "
@@ -40,13 +44,26 @@ def get_llm_analysis() -> dict:
             "  Bullet 1 — The Best Move:\n"
             "    Use `strongMove`. State exactly how many possibilities it ruled out\n"
             "    and why that guess was the turning point.\n\n"
-            "  Bullet 2 — The Weak Move:\n"
+            "  Bullet 2 — The Logic Check:\n"
             + (
-                "    Use `struggleMove`. Explain the specific lapse — did it test something already ruled out,\n"
-                "    or did it barely narrow the remaining options? Name the wasted potential concretely.\n"
-                if has_struggle else
-                "    No `struggleMove` this game — the player avoided any clear weak guess.\n"
-                "    Highlight a second strong decision the player made, with a specific detail.\n"
+                "    `logicFlag` is present. Use ONLY the directive below for its type.\n"
+                "    State the factual error and its consequence. NO prescriptive advice\n"
+                "    (no 'Next time...' or 'Always...'). Tone: analytical, direct, factual.\n\n"
+                "    - unforced_error_green: Tell the player they locked in {digit_involved}\n"
+                "      correctly, but undid that progress by moving or dropping it in Guess {trigger_guess}.\n"
+                "    - missed_proof: Point out Guess {trigger_guess} proved {digit_involved} wasn't\n"
+                "      in the code (total pegs dropped), yet they reused it in Guesses {wasted_guesses}.\n"
+                "    - false_negative: Highlight that adding {digit_involved} in Guess {trigger_guess}\n"
+                "      raised peg count — proving it correct — but they dropped it in the very next guess.\n"
+                "    - false_anchor: Explain they anchored on dead digit {digit_involved} starting\n"
+                "      Guess {trigger_guess}, misreading clues and wasting Guesses {wasted_guesses}.\n"
+                "    - repeated_slot: Note that {digit_involved} was a known yellow (wrong spot),\n"
+                "      but they wasted Guess {trigger_guess} testing it in that exact slot again.\n"
+                "    - dropped_yellow: Point out that in Guess {trigger_guess} they didn't carry\n"
+                "      enough digits to account for guaranteed yellows on the board.\n"
+                if has_flag else
+                "    `logicFlag` is null — the player made no logical errors.\n"
+                "    Highlight a second strong decision with a specific detail.\n"
             )
             + "\n"
             "  Bullet 3 — Takeaway (use `performanceTier` from the data to pick one branch):\n"

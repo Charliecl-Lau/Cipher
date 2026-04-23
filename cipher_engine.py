@@ -133,21 +133,180 @@ def explain_step(step: int, guess: tuple, feedback: tuple,
     return f"**Guess {step} ({gs}):** {method} Result: {result} {space}"
 
 
-def build_llm_payload(user_path_stats: list, ai_full_path: list) -> dict:
+def evaluate_logic_flags(user_guesses: list, secret: tuple):
+    """
+    Analyse the player's guess history for logical errors.
+
+    Args:
+        user_guesses: list of (guess_tuple, feedback_tuple) pairs
+        secret: 4-tuple of unique digits
+
+    Returns:
+        A logicFlag dict with at least 'type', 'digit_involved', 'trigger_guess',
+        and optionally 'wasted_guesses', or None if no errors found.
+        Flags are evaluated in tier order; first triggered is returned.
+    """
+    n = len(user_guesses)
+    if n == 0:
+        return None
+
+    # Helper: which positions in guess match secret (green positions)
+    def green_positions(guess):
+        return {pos: guess[pos] for pos in range(4) if guess[pos] == secret[pos]}
+
+    # Helper: which digits in guess are in secret but at wrong position (yellow digits)
+    def yellow_digits_with_slots(guess):
+        secret_set = set(secret)
+        return {pos: guess[pos] for pos in range(4)
+                if guess[pos] in secret_set and guess[pos] != secret[pos]}
+
+    # ── Tier 1: unforced_error_green ─────────────────────────────────────────
+    for i in range(n - 1):
+        g_pos = green_positions(user_guesses[i][0])
+        if g_pos:
+            for j in range(i + 1, n):
+                later_guess = user_guesses[j][0]
+                for pos, digit in g_pos.items():
+                    if later_guess[pos] != digit:
+                        return {
+                            "type": "unforced_error_green",
+                            "digit_involved": digit,
+                            "trigger_guess": j + 1,
+                        }
+
+    # ── Tier 1: missed_proof ─────────────────────────────────────────────────
+    for i in range(1, n - 1):
+        prev_guess, prev_fb = user_guesses[i - 1]
+        curr_guess, curr_fb = user_guesses[i]
+        prev_total = prev_fb[0] + prev_fb[1]
+        curr_total = curr_fb[0] + curr_fb[1]
+        if curr_total < prev_total:
+            # digits in prev not in curr were removed; if total dropped, they proved absent
+            prev_set = set(prev_guess)
+            curr_set = set(curr_guess)
+            removed = prev_set - curr_set
+            if removed:
+                for k in range(i + 1, n):
+                    next_guess = user_guesses[k][0]
+                    next_set = set(next_guess)
+                    reused = removed & next_set
+                    if reused:
+                        digit = next(iter(reused))
+                        wasted = []
+                        for m in range(i + 1, n):
+                            if digit in set(user_guesses[m][0]):
+                                wasted.append(m + 1)
+                        return {
+                            "type": "missed_proof",
+                            "digit_involved": digit,
+                            "trigger_guess": i + 1,
+                            "wasted_guesses": wasted,
+                        }
+
+    # ── Tier 2: false_negative ───────────────────────────────────────────────
+    for i in range(1, n - 1):
+        prev_guess, prev_fb = user_guesses[i - 1]
+        curr_guess, curr_fb = user_guesses[i]
+        prev_total = prev_fb[0] + prev_fb[1]
+        curr_total = curr_fb[0] + curr_fb[1]
+        if curr_total > prev_total:
+            # Pegs went up; intersect with secret to only flag genuinely confirmed digits
+            prev_set = set(prev_guess)
+            curr_set = set(curr_guess)
+            added = (curr_set - prev_set) & set(secret)
+            if added and i + 1 < n:
+                next_guess = user_guesses[i + 1][0]
+                next_set = set(next_guess)
+                dropped = added - next_set
+                if dropped:
+                    digit = next(iter(dropped))
+                    return {
+                        "type": "false_negative",
+                        "digit_involved": digit,
+                        "trigger_guess": i + 1,  # the confirming guess (where pegs went up)
+                    }
+
+    # ── Tier 2: false_anchor ─────────────────────────────────────────────────
+    secret_set = set(secret)
+    for digit in range(10):
+        if digit in secret_set:
+            continue
+        # find runs of 3+ consecutive guesses containing this dead digit
+        run_start = None
+        run_len = 0
+        for i, (guess, _) in enumerate(user_guesses):
+            if digit in guess:
+                if run_len == 0:
+                    run_start = i
+                run_len += 1
+                if run_len >= 3:
+                    wasted = list(range(run_start + 1, run_start + run_len + 1))
+                    return {
+                        "type": "false_anchor",
+                        "digit_involved": digit,
+                        "trigger_guess": run_start + 1,
+                        "wasted_guesses": wasted,
+                    }
+            else:
+                run_len = 0
+                run_start = None
+
+    # ── Tier 3: repeated_slot ────────────────────────────────────────────────
+    # Build map of (digit, slot) → first guess index where it was yellow
+    yellow_seen: dict = {}
+    for i, (guess, _) in enumerate(user_guesses):
+        yw = yellow_digits_with_slots(guess)
+        for pos, digit in yw.items():
+            key = (digit, pos)
+            if key in yellow_seen:
+                return {
+                    "type": "repeated_slot",
+                    "digit_involved": digit,
+                    "trigger_guess": i + 1,
+                }
+            else:
+                yellow_seen[key] = i
+
+    # ── Tier 3: dropped_yellow ───────────────────────────────────────────────
+    for i in range(n - 1):
+        curr_guess, curr_fb = user_guesses[i]
+        g, y, _ = curr_fb
+        confirmed_count = g + y  # digits confirmed in code
+        if confirmed_count == 0:
+            continue
+        # Which specific digits are confirmed in code?
+        confirmed_digits = {d for d in curr_guess if d in secret_set}
+        next_guess = user_guesses[i + 1][0]
+        next_set = set(next_guess)
+        carried = confirmed_digits & next_set
+        if len(carried) < len(confirmed_digits):
+            return {
+                "type": "dropped_yellow",
+                "digit_involved": None,
+                "trigger_guess": i + 2,
+            }
+
+    return None
+
+
+def build_llm_payload(user_path_stats: list, ai_full_path: list,
+                      user_guesses=None, secret=None) -> dict:
     """
     Build the enriched JSON payload for the LLM coaching prompt.
-    All structural decisions (tier, percentages, strong/weak move) are made
-    here in Python — the LLM's only job is vocabulary and phrasing.
+    All structural decisions (tier, percentages, strong move, logic flags) are
+    made here in Python — the LLM's only job is vocabulary and phrasing.
 
     Args:
         user_path_stats: list of dicts from precompute_user_path_stats(),
             each with keys: guess, feedback, cands_before, cands_after.
         ai_full_path: list of dicts from precompute_ai_full_game(),
             each with keys: guess, feedback, cands_before, cands_after, entropy.
+        user_guesses: optional list of (guess_tuple, feedback_tuple) pairs.
+        secret: optional tuple — the secret code.
 
     Returns:
         dict with keys: userStepCount, perfectStepCount, efficiencyRating,
-        performanceTier, strongMove, and optionally struggleMove.
+        performanceTier, strongMove, logicFlag.
     """
     user_steps    = len(user_path_stats)
     perfect_steps = len(ai_full_path)
@@ -179,17 +338,10 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list) -> dict:
     post_opening = [s for s in annotated if s["guessNumber"] != 1]
     strong = max(post_opening or annotated, key=lambda s: s["eliminated_count"])
 
-    # struggleMove: lowest eliminated_count among non-final guesses that are
-    # not the same step as strongMove (avoid double-counting short games)
-    non_final_excl_strong = [
-        s for s in annotated[:-1]
-        if s["guessNumber"] != strong["guessNumber"]
-    ]
-    struggle = (
-        min(non_final_excl_strong, key=lambda s: s["eliminated_count"])
-        if non_final_excl_strong
-        else None
-    )
+    # logicFlag: detect logical errors in the player's path (requires raw guesses + secret)
+    logic_flag = None
+    if user_guesses is not None and secret is not None:
+        logic_flag = evaluate_logic_flags(user_guesses, secret)
 
     payload: dict = {
         "userStepCount":    user_steps,
@@ -197,8 +349,7 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list) -> dict:
         "efficiencyRating": efficiency,
         "performanceTier":  tier,
         "strongMove":       strong,
+        "logicFlag":        logic_flag,
     }
-    if struggle:
-        payload["struggleMove"] = struggle
 
     return payload

@@ -289,6 +289,64 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
     return None
 
 
+def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
+    n = len(user_guesses)
+    if n < 2:
+        return None
+
+    # smart_isolation: carries exactly 1 digit from prev guess, rest are brand new
+    all_used: set = set()
+    for i in range(n - 1):
+        prev_set = set(user_guesses[i][0])
+        curr_set = set(user_guesses[i + 1][0])
+        all_used |= prev_set
+        carryover = prev_set & curr_set
+        if len(carryover) == 1:
+            new_digits = curr_set - prev_set
+            if new_digits and not (new_digits & all_used):
+                digit = next(iter(carryover))
+                return {
+                    "type": "smart_isolation",
+                    "digit_involved": digit,
+                    "trigger_guess": i + 2,
+                }
+
+    # efficient_pivot: peg count drops when digit introduced; digit gone next guess
+    for i in range(1, n - 1):
+        prev_guess, prev_fb = user_guesses[i - 1]
+        curr_guess, curr_fb = user_guesses[i]
+        next_guess = user_guesses[i + 1][0]
+        prev_total = prev_fb[0] + prev_fb[1]
+        curr_total = curr_fb[0] + curr_fb[1]
+        if curr_total < prev_total:
+            added = set(curr_guess) - set(prev_guess)
+            dropped_next = added - set(next_guess)
+            absent_from_secret = dropped_next - set(secret)
+            if absent_from_secret:
+                digit = next(iter(absent_from_secret))
+                return {
+                    "type": "efficient_pivot",
+                    "digit_involved": digit,
+                    "trigger_guess": i + 1,
+                }
+
+    # perfect_lock: green digit kept in same slot every subsequent guess
+    def green_positions(guess):
+        return {pos: guess[pos] for pos in range(4) if guess[pos] == secret[pos]}
+
+    for i in range(n - 1):
+        g_pos = green_positions(user_guesses[i][0])
+        for pos, digit in g_pos.items():
+            if all(user_guesses[j][0][pos] == digit for j in range(i + 1, n)):
+                return {
+                    "type": "perfect_lock",
+                    "digit_involved": digit,
+                    "trigger_guess": i + 1,
+                }
+
+    return None
+
+
 def build_llm_payload(user_path_stats: list, ai_full_path: list,
                       user_guesses=None, secret=None) -> dict:
     """

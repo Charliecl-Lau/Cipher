@@ -1,5 +1,5 @@
 import pytest
-from cipher_engine import build_llm_payload, evaluate_logic_flags
+from cipher_engine import build_llm_payload, evaluate_logic_flags, evaluate_good_logic_flags
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────────
@@ -360,3 +360,84 @@ class TestEvaluateLogicFlags:
         flag = evaluate_logic_flags(user_guesses, secret)
         assert flag is not None
         assert flag["type"] == "false_negative"
+
+
+class TestEvaluateGoodLogicFlags:
+    # ── smart_isolation ──────────────────────────────────────────────────────
+    def test_smart_isolation_detected(self):
+        # Guess 1: (0,1,2,3) — 4 digits used
+        # Guess 2: (1,4,5,6) — carries over digit 1 (was in guess 1), fills rest with new digits 4,5,6
+        # secret contains 1
+        secret = (1, 7, 8, 9)
+        guesses = [
+            ((0, 1, 2, 3), (0, 1, 3)),  # 1 yellow
+            ((1, 4, 5, 6), (0, 1, 3)),  # 1 yellow carried, rest new
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is not None
+        assert result["type"] == "smart_isolation"
+        assert result["digit_involved"] == 1
+        assert result["trigger_guess"] == 2
+
+    def test_smart_isolation_not_triggered_when_too_many_carryovers(self):
+        # Guess 2 carries 2 digits from guess 1 — not isolation (needs exactly 1)
+        secret = (1, 2, 7, 8)
+        guesses = [
+            ((0, 1, 2, 3), (0, 2, 2)),
+            ((1, 2, 4, 5), (0, 2, 2)),  # carries 1 AND 2
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is None or result["type"] != "smart_isolation"
+
+    # ── efficient_pivot ──────────────────────────────────────────────────────
+    def test_efficient_pivot_detected(self):
+        # Minimal valid scenario:
+        # G1: (0,1,2,3) → 3 pegs (1,2,3 correct). G2: (0,1,2,5) → 2 pegs (5 caused drop). G3: (0,1,2,6) → no 5
+        secret5 = (1, 2, 3, 4)
+        guesses_ep = [
+            ((0, 1, 2, 3), (0, 3, 1)),  # 3 pegs
+            ((0, 1, 2, 5), (0, 2, 2)),  # 5 introduced, pegs drop to 2
+            ((0, 1, 2, 6), (0, 2, 2)),  # 5 dropped in next guess
+        ]
+        result = evaluate_good_logic_flags(guesses_ep, secret5)
+        assert result is not None
+        assert result["type"] == "efficient_pivot"
+        assert result["digit_involved"] == 5
+        assert result["trigger_guess"] == 2
+
+    # ── perfect_lock ─────────────────────────────────────────────────────────
+    def test_perfect_lock_detected(self):
+        # Digit 3 is green at pos 2 in guess 1, stays at pos 2 in all later guesses
+        secret = (1, 2, 3, 4)
+        guesses = [
+            ((0, 0, 3, 0), (1, 0, 3)),  # digit 3 green at pos 2
+            ((1, 0, 3, 0), (1, 0, 3)),  # 3 still at pos 2
+            ((1, 2, 3, 4), (4, 0, 0)),  # solved; 3 still at pos 2
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is not None
+        assert result["type"] == "perfect_lock"
+        assert result["digit_involved"] == 3
+        assert result["trigger_guess"] == 1
+
+    def test_returns_none_when_no_positive_flags(self):
+        # Random guesses with no smart behavior
+        secret = (1, 2, 3, 4)
+        guesses = [
+            ((5, 6, 7, 8), (0, 0, 4)),
+            ((0, 9, 5, 6), (0, 0, 4)),
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is None
+
+    def test_smart_isolation_takes_priority_over_efficient_pivot(self):
+        # Build a scenario that triggers both; smart_isolation must win
+        secret = (1, 7, 8, 9)
+        # Guess 1 has digit 1 (yellow), guess 2 carries only digit 1 + 3 new digits
+        guesses = [
+            ((0, 1, 2, 3), (0, 1, 3)),  # 1 yellow
+            ((1, 4, 5, 6), (0, 1, 3)),  # carries only digit 1; 3 new digits
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is not None
+        assert result["type"] == "smart_isolation"

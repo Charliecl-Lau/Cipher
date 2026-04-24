@@ -363,51 +363,20 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list,
         secret: optional tuple — the secret code.
 
     Returns:
-        dict with keys: userStepCount, perfectStepCount, efficiencyRating,
-        performanceTier, strongMove, logicFlag.
+        dict with keys: userStepCount, perfectStepCount, goodLogicFlag, logicFlag.
     """
     user_steps    = len(user_path_stats)
     perfect_steps = len(ai_full_path)
-    delta         = user_steps - perfect_steps
 
-    if delta <= 1:
-        tier = "efficient"
-    elif delta <= 3:
-        tier = "average"
-    else:
-        tier = "struggling"
-
-    efficiency = round(perfect_steps / user_steps * 100) if user_steps > 0 else 100
-
-    # Annotate each step with eliminated count and percentage of total space
-    annotated = [
-        {
-            "guessNumber":      i + 1,
-            "guess":            "-".join(str(d) for d in s["guess"]),
-            "eliminated_count": s["cands_before"] - s["cands_after"],
-            "eliminated_pct":   round((s["cands_before"] - s["cands_after"]) / 5040 * 100),
-        }
-        for i, s in enumerate(user_path_stats)
-    ]
-
-    # strongMove: highest eliminated_count, skipping the opening guess (guess 1)
-    # so the LLM highlights a mid-game turning point, not a standard opener.
-    # Fall back to all guesses only if there is just one guess total.
-    post_opening = [s for s in annotated if s["guessNumber"] != 1]
-    strong = max(post_opening or annotated, key=lambda s: s["eliminated_count"])
-
-    # logicFlag: detect logical errors in the player's path (requires raw guesses + secret)
-    logic_flag = None
+    logic_flag      = None
+    good_logic_flag = None
     if user_guesses is not None and secret is not None:
-        logic_flag = evaluate_logic_flags(user_guesses, secret)
+        logic_flag      = evaluate_logic_flags(user_guesses, secret)
+        good_logic_flag = evaluate_good_logic_flags(user_guesses, secret)
 
-    payload: dict = {
+    return {
         "userStepCount":    user_steps,
         "perfectStepCount": perfect_steps,
-        "efficiencyRating": efficiency,
-        "performanceTier":  tier,
-        "strongMove":       strong,
+        "goodLogicFlag":    good_logic_flag,
         "logicFlag":        logic_flag,
     }
-
-    return payload

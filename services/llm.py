@@ -23,8 +23,42 @@ def get_llm_analysis() -> dict:
             user_guesses=st.session_state.user_guesses,
             secret=st.session_state.secret,
         )
+        good_flag  = payload.get("goodLogicFlag")
         logic_flag = payload.get("logicFlag")
 
+        # ── Bullet 1 directive (goodLogicFlag) ──────────────────────────────
+        if good_flag is None:
+            bullet1_directive = (
+                "    No standout positive play detected. Briefly acknowledge they completed\n"
+                "    the puzzle and highlight one moment where their process was solid."
+            )
+        else:
+            gf_type  = good_flag["type"]
+            gf_digit = good_flag["digit_involved"]
+            gf_trig  = good_flag["trigger_guess"]
+            good_directives = {
+                "smart_isolation": (
+                    f"    In Guess {gf_trig} the player isolated digit {gf_digit} alongside\n"
+                    f"    completely untested digits to confirm its status. Praise this\n"
+                    f"    deduction specifically. NO PRESCRIPTIVE ADVICE."
+                ),
+                "efficient_pivot": (
+                    f"    In Guess {gf_trig} the player immediately dropped digit {gf_digit}\n"
+                    f"    after the peg count fell — mathematical proof it was wrong. Praise\n"
+                    f"    this instant pivot specifically. NO PRESCRIPTIVE ADVICE."
+                ),
+                "perfect_lock": (
+                    f"    The player found a green peg for digit {gf_digit} in Guess {gf_trig}\n"
+                    f"    and never moved it for the rest of the game. Praise this discipline\n"
+                    f"    specifically. NO PRESCRIPTIVE ADVICE."
+                ),
+            }
+            bullet1_directive = good_directives.get(
+                gf_type,
+                "    Praise a specific smart decision the player made."
+            )
+
+        # ── Bullet 2 directive (logicFlag) ──────────────────────────────────
         if logic_flag is None:
             bullet2_directive = (
                 "    No logical errors detected. Highlight a second strong decision\n"
@@ -88,26 +122,20 @@ def get_llm_analysis() -> dict:
             "- Use instead: ruled out, narrowed down, options left, possibilities\n"
             "- Each bullet: exactly 2–3 sentences, 30–60 words. "
             "Count the words. If a bullet exceeds 60 words, rewrite it before responding.\n"
-            "- For Logic Error bullets: state facts and consequences only. "
+            "- State facts and consequences only. "
             "Do NOT add any advice, tips, or 'next time' phrases.\n"
-            "- Do NOT include the bullet label (e.g. 'The Best Move:') inside the string value.\n"
+            "- Do NOT include the bullet label inside the string value.\n"
             '- Return ONLY a raw JSON object — no markdown fences, no extra keys:\n'
-            '  {"headline": string, "bullets": [string, string, string]}\n'
+            '  {"headline": string, "bullets": [string, string]}\n'
             "- The very first character of your response must be {\n\n"
             "[DATA]\n"
             f"{json.dumps(payload, indent=2)}\n\n"
             "[TASK]\n"
-            "Write a headline (3–7 words) and exactly 3 bullets:\n\n"
-            "  Bullet 1 — The Best Move:\n"
-            "    Use `strongMove`. State exactly how many possibilities it ruled out\n"
-            "    and why that guess was the turning point.\n\n"
-            "  Bullet 2 — The Logic Check:\n"
-            + bullet2_directive + "\n\n"
-            "  Bullet 3 — Takeaway (use `performanceTier` from the data to pick one branch):\n"
-            "    efficient  → open with a compliment, then give one concrete tip for cross-referencing\n"
-            "                  clues to eliminate the last few options without guessing blindly\n"
-            "    average    → encouraging but direct; name one specific habit that would cut a guess off\n"
-            "    struggling → honest but kind; name the one thing costing them the most turns"
+            "Write a headline (3–7 words) and exactly 2 bullets:\n\n"
+            "  Bullet 1 — The Smart Deduction:\n"
+            + bullet1_directive + "\n\n"
+            "  Bullet 2 — The Logic Leak:\n"
+            + bullet2_directive
         )
 
         from google import genai
@@ -126,7 +154,7 @@ def get_llm_analysis() -> dict:
         result = json.loads(raw)
 
         assert isinstance(result["headline"], str) and 3 <= len(result["headline"].split()) <= 7
-        assert len(result["bullets"]) == 3
+        assert len(result["bullets"]) == 2
         assert all(len(b.split()) <= 65 for b in result["bullets"])
 
         st.session_state.llm_analysis = result
@@ -139,7 +167,6 @@ def get_llm_analysis() -> dict:
             "bullets": [
                 f"You solved it in {len(user_path_stats)} guesses.",
                 f"The perfect path was {len(ai_full_path)} guesses.",
-                "Try again to see a detailed breakdown.",
             ],
         }
         st.session_state.llm_analysis = fallback

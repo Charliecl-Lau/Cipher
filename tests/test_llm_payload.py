@@ -405,6 +405,20 @@ class TestEvaluateGoodLogicFlags:
         assert result["digit_involved"] == 5
         assert result["trigger_guess"] == 2
 
+    def test_efficient_pivot_stays_at_zero(self):
+        # G1: all wrong, 0 pegs. G2: introduces digit 5, still 0 pegs. G3: drops digit 5.
+        secret = (1, 2, 3, 4)
+        guesses = [
+            ((6, 7, 8, 9), (0, 0, 4)),   # 0 pegs
+            ((5, 7, 8, 9), (0, 0, 4)),   # 5 introduced, still 0 pegs (stays at 0)
+            ((6, 7, 8, 9), (0, 0, 4)),   # 5 dropped
+        ]
+        result = evaluate_good_logic_flags(guesses, secret)
+        assert result is not None
+        assert result["type"] == "efficient_pivot"
+        assert result["digit_involved"] == 5
+        assert result["trigger_guess"] == 2
+
     # ── perfect_lock ─────────────────────────────────────────────────────────
     def test_perfect_lock_detected(self):
         # Digit 3 is green at pos 2 in guess 1, stays at pos 2 in all later guesses

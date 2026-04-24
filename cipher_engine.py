@@ -318,7 +318,7 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
         next_guess = user_guesses[i + 1][0]
         prev_total = prev_fb[0] + prev_fb[1]
         curr_total = curr_fb[0] + curr_fb[1]
-        if curr_total < prev_total:
+        if curr_total < prev_total or (prev_total == 0 and curr_total == 0):
             added = set(curr_guess) - set(prev_guess)
             dropped_next = added - set(next_guess)
             absent_from_secret = dropped_next - set(secret)

@@ -304,7 +304,7 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
         if len(carryover) == 1:
             new_digits = curr_set - prev_set
             if new_digits and not (new_digits & all_used):
-                digit = next(iter(carryover))
+                digit = min(carryover)
                 return {
                     "type": "smart_isolation",
                     "digit_involved": digit,
@@ -323,7 +323,7 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
             dropped_next = added - set(next_guess)
             absent_from_secret = dropped_next - set(secret)
             if absent_from_secret:
-                digit = next(iter(absent_from_secret))
+                digit = min(absent_from_secret)
                 return {
                     "type": "efficient_pivot",
                     "digit_involved": digit,

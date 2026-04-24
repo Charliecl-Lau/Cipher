@@ -898,12 +898,10 @@ div[data-testid="stRadio"] > div > label p {
     color: #5C3A1A !important;
 }
 
-/* ─── Invisible scroll container for guess list ─── */
+/* ─── Fixed-height viewport for guess list — exactly 5 rows ─── */
 .guess-scroll-container {
-    max-height: 450px;
+    height: 250px;
     overflow-y: auto;
-    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
-    mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
 /* Hide scrollbar — Webkit */

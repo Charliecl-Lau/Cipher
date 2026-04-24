@@ -23,7 +23,62 @@ def get_llm_analysis() -> dict:
             user_guesses=st.session_state.user_guesses,
             secret=st.session_state.secret,
         )
-        has_flag = payload.get("logicFlag") is not None
+        logic_flag = payload.get("logicFlag")
+
+        if logic_flag is None:
+            bullet2_directive = (
+                "    No logical errors detected. Highlight a second strong decision\n"
+                "    the player made, with a specific concrete detail."
+            )
+        else:
+            flag_type  = logic_flag["type"]
+            digit      = logic_flag["digit_involved"]
+            trig       = logic_flag["trigger_guess"]
+            wasted     = logic_flag.get("wasted_guesses", [])
+            wasted_str = ", ".join(str(g) for g in wasted) if wasted else ""
+            plural     = "es" if len(wasted) > 1 else ""
+
+            directives = {
+                "unforced_error_green": (
+                    f"    The player correctly confirmed digit {digit} as a green peg\n"
+                    f"    in an earlier guess, but in Guess {trig} they moved or dropped\n"
+                    f"    it, undoing their own progress. State the factual error and\n"
+                    f"    consequence. NO PRESCRIPTIVE ADVICE."
+                ),
+                "missed_proof": (
+                    f"    Guess {trig} provided mathematical proof that digit {digit}\n"
+                    f"    was not in the code because the total peg count dropped, yet\n"
+                    f"    the player reused it in Guess{plural} {wasted_str}.\n"
+                    f"    State the factual error and consequence. NO PRESCRIPTIVE ADVICE."
+                ),
+                "false_negative": (
+                    f"    Adding digit {digit} in Guess {trig} caused the peg count to\n"
+                    f"    increase, proving it was a correct digit, but the player dropped\n"
+                    f"    it immediately after. State the factual error and consequence.\n"
+                    f"    NO PRESCRIPTIVE ADVICE."
+                ),
+                "false_anchor": (
+                    f"    The player anchored onto digit {digit} starting around Guess {trig}\n"
+                    f"    even though it was never in the code, wasting Guess{plural} {wasted_str}.\n"
+                    f"    State the factual error and consequence. NO PRESCRIPTIVE ADVICE."
+                ),
+                "repeated_slot": (
+                    f"    The player already knew digit {digit} was a yellow peg (wrong\n"
+                    f"    position), but in Guess {trig} they tested it in that exact same\n"
+                    f"    slot again. State the factual error and consequence.\n"
+                    f"    NO PRESCRIPTIVE ADVICE."
+                ),
+                "dropped_yellow": (
+                    f"    The player had guaranteed yellow pegs from the previous guess,\n"
+                    f"    but in Guess {trig} they didn't carry forward enough digits to\n"
+                    f"    account for them. State the factual error and consequence.\n"
+                    f"    NO PRESCRIPTIVE ADVICE."
+                ),
+            }
+            bullet2_directive = directives.get(
+                flag_type,
+                "    Point out the specific logical lapse in the player's guess sequence."
+            )
 
         system_prompt = (
             "You are a sharp, friendly game coach analysing a code-breaking puzzle. "
@@ -33,6 +88,8 @@ def get_llm_analysis() -> dict:
             "- Use instead: ruled out, narrowed down, options left, possibilities\n"
             "- Each bullet: exactly 2–3 sentences, 30–60 words. "
             "Count the words. If a bullet exceeds 60 words, rewrite it before responding.\n"
+            "- For Logic Error bullets: state facts and consequences only. "
+            "Do NOT add any advice, tips, or 'next time' phrases.\n"
             "- Do NOT include the bullet label (e.g. 'The Best Move:') inside the string value.\n"
             '- Return ONLY a raw JSON object — no markdown fences, no extra keys:\n'
             '  {"headline": string, "bullets": [string, string, string]}\n'
@@ -45,27 +102,7 @@ def get_llm_analysis() -> dict:
             "    Use `strongMove`. State exactly how many possibilities it ruled out\n"
             "    and why that guess was the turning point.\n\n"
             "  Bullet 2 — The Logic Check:\n"
-            + (
-                "    `logicFlag` is present. Use ONLY the directive below for its type.\n"
-                "    State the factual error and its consequence. NO prescriptive advice\n"
-                "    (no 'Next time...' or 'Always...'). Tone: analytical, direct, factual.\n\n"
-                "    - unforced_error_green: Tell the player they locked in {digit_involved}\n"
-                "      correctly, but undid that progress by moving or dropping it in Guess {trigger_guess}.\n"
-                "    - missed_proof: Point out Guess {trigger_guess} proved {digit_involved} wasn't\n"
-                "      in the code (total pegs dropped), yet they reused it in Guesses {wasted_guesses}.\n"
-                "    - false_negative: Highlight that adding {digit_involved} in Guess {trigger_guess}\n"
-                "      raised peg count — proving it correct — but they dropped it in the very next guess.\n"
-                "    - false_anchor: Explain they anchored on dead digit {digit_involved} starting\n"
-                "      Guess {trigger_guess}, misreading clues and wasting Guesses {wasted_guesses}.\n"
-                "    - repeated_slot: Note that {digit_involved} was a known yellow (wrong spot),\n"
-                "      but they wasted Guess {trigger_guess} testing it in that exact slot again.\n"
-                "    - dropped_yellow: Point out that in Guess {trigger_guess} they didn't carry\n"
-                "      enough digits to account for guaranteed yellows on the board.\n"
-                if has_flag else
-                "    `logicFlag` is null — the player made no logical errors.\n"
-                "    Highlight a second strong decision with a specific detail.\n"
-            )
-            + "\n"
+            + bullet2_directive + "\n\n"
             "  Bullet 3 — Takeaway (use `performanceTier` from the data to pick one branch):\n"
             "    efficient  → open with a compliment, then give one concrete tip for cross-referencing\n"
             "                  clues to eliminate the last few options without guessing blindly\n"

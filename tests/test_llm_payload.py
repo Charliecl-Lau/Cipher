@@ -1,5 +1,8 @@
 import pytest
-from cipher_engine import build_llm_payload, evaluate_logic_flags, evaluate_good_logic_flags
+from cipher_engine import (
+    build_llm_payload, evaluate_logic_flags, evaluate_good_logic_flags,
+    compute_yellow_analysis, compute_key_moments,
+)
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────────
@@ -78,29 +81,33 @@ class TestEvaluateLogicFlags:
     # ── Tier 1: unforced_error_green ──────────────────────────────────────────
 
     def test_unforced_error_green(self):
-        # secret = (3, 7, 1, 9)
-        # guess 1: (0, 3, 1, 5) — digit 1 is at pos 2 in guess and pos 2 in secret → green
-        # guess 2: (0, 3, 4, 5) — drops digit 1 from pos 2
+        # Grace period: dropping a green from guess 1 in guess 2 does NOT fire
+        # unforced_error_green (per the early-game grace period). The flag fires
+        # at guess 3+ when the green established in guess 1 is still absent.
+        # secret = (3, 7, 1, 9); digit 1 is green at pos 2 in guess 1.
+        # Guess 2 drops it (grace period applies — no flag yet).
+        # Guess 3 still lacks digit 1 at pos 2 → unforced_error_green fires.
         secret = (3, 7, 1, 9)
-        # pos 0=3,pos1=7,pos2=1,pos3=9
         user_guesses = [
-            ((0, 3, 1, 5), (1, 1, 2)),  # green: digit 1 at pos 2; yellow: digit 3 at pos 1
-            ((0, 3, 4, 5), (0, 1, 3)),  # dropped digit 1 from pos 2 → unforced error
+            ((0, 3, 1, 5), (1, 1, 2)),  # green: digit 1 at pos 2
+            ((0, 3, 4, 5), (0, 1, 3)),  # drops digit 1 (grace period — no flag)
+            ((0, 3, 4, 8), (0, 1, 3)),  # still lacks digit 1 at pos 2 → fires
         ]
         flag = evaluate_logic_flags(user_guesses, secret)
         assert flag is not None
         assert flag["type"] == "unforced_error_green"
         assert flag["digit_involved"] == 1
-        assert flag["trigger_guess"] == 2
+        assert flag["trigger_guess"] == 3
 
     def test_unforced_error_green_moved_digit(self):
-        # secret = (3, 7, 1, 9)
-        # guess 1: (0, 3, 1, 5) — digit 1 green at pos 2
-        # guess 2: (0, 3, 5, 1) — digit 1 moved to pos 3 (wrong pos now)
+        # secret = (3, 7, 1, 9); digit 1 green at pos 2 in guess 1.
+        # Grace period: drop in guess 2 is forgiven.
+        # Guess 3 moves digit 1 to pos 3 (wrong pos) → fires at trigger_guess=3.
         secret = (3, 7, 1, 9)
         user_guesses = [
-            ((0, 3, 1, 5), (1, 1, 2)),
-            ((0, 3, 5, 1), (0, 2, 2)),  # 1 moved to pos 3 → unforced error
+            ((0, 3, 1, 5), (1, 1, 2)),   # digit 1 green at pos 2
+            ((0, 3, 4, 5), (0, 1, 3)),   # grace period: no flag
+            ((0, 3, 5, 1), (0, 2, 2)),   # 1 moved to pos 3 → fires
         ]
         flag = evaluate_logic_flags(user_guesses, secret)
         assert flag is not None
@@ -383,10 +390,30 @@ class TestNewPayloadSchema:
         assert "performanceTier"  not in result
 
     def test_payload_keys_are_exactly(self):
+        # Without user_guesses/secret: yellowAnalysis and keyMoments should be None
         user = [make_step((0,1,2,3), (2,1,1), 5040, 180)]
         ai   = make_ai_path(2)
         result = build_llm_payload(user, ai)
-        assert set(result.keys()) == {"userStepCount", "perfectStepCount", "goodLogicFlag", "logicFlag"}
+        assert set(result.keys()) == {
+            "userStepCount", "perfectStepCount", "goodLogicFlag", "logicFlag",
+            "yellowAnalysis", "keyMoments",
+        }
+        assert result["yellowAnalysis"] is None
+        assert result["keyMoments"] is None
+
+    def test_payload_keys_with_guesses(self):
+        # With user_guesses/secret: yellowAnalysis and keyMoments should be populated
+        secret = (3, 7, 1, 9)
+        user_guesses = [((3, 7, 1, 9), (4, 0, 0))]
+        user = [make_step((3,7,1,9), (4,0,0), 5040, 0)]
+        ai   = make_ai_path(1)
+        result = build_llm_payload(user, ai, user_guesses=user_guesses, secret=secret)
+        assert set(result.keys()) == {
+            "userStepCount", "perfectStepCount", "goodLogicFlag", "logicFlag",
+            "yellowAnalysis", "keyMoments",
+        }
+        assert result["yellowAnalysis"] is not None
+        assert result["keyMoments"] is not None
 
     def test_good_logic_flag_is_none_when_no_guesses(self):
         user = [make_step((0,1,2,3), (2,1,1), 5040, 180)]
@@ -409,3 +436,57 @@ class TestNewPayloadSchema:
         result = build_llm_payload(user_path, ai, user_guesses=guesses, secret=secret)
         assert result["goodLogicFlag"] is not None
         assert result["goodLogicFlag"]["type"] == "smart_isolation"
+
+
+class TestYellowAnalysis:
+    # secret = (3, 7, 1, 9) used throughout unless otherwise noted
+
+    def test_yellow_analysis_none_when_no_guesses_arg(self):
+        user = [make_step((0, 1, 2, 3), (2, 1, 1), 5040, 180)]
+        ai   = make_ai_path(2)
+        result = build_llm_payload(user, ai)
+        assert result["yellowAnalysis"] is None
+
+    def test_yellow_analysis_total_feedback(self):
+        # guess 1: 2 yellows, guess 2: 1 yellow → totalYellowFeedback = 3
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 3, 0, 5), (0, 2, 2)),   # 7 and 3 are yellow
+            ((1, 0, 9, 5), (0, 1, 3)),   # 1 is yellow (in secret at pos 2, placed at pos 0)
+        ]
+        result = compute_yellow_analysis(user_guesses, secret)
+        assert result["totalYellowFeedback"] == 3
+
+    def test_dropped_after_yellow_detected(self):
+        # guess 1 yields yellow for digit 7 (yellow at pos 0); guess 2 drops digit 7
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 0, 4, 6), (0, 1, 3)),   # digit 7 yellow at pos 0
+            ((5, 0, 4, 6), (0, 0, 4)),   # digit 7 dropped
+        ]
+        result = compute_yellow_analysis(user_guesses, secret)
+        assert len(result["droppedAfterYellow"]) == 1
+        entry = result["droppedAfterYellow"][0]
+        assert entry["guess"] == 1
+        assert 7 in entry["digitsDropped"]
+        assert entry["yellowPegsThatGuess"] == 1
+
+    def test_missed_carry_forward_true(self):
+        # droppedAfterYellow is non-empty → missedCarryForward must be True
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 0, 4, 6), (0, 1, 3)),   # digit 7 yellow
+            ((5, 0, 4, 6), (0, 0, 4)),   # digit 7 dropped
+        ]
+        result = compute_yellow_analysis(user_guesses, secret)
+        assert result["missedCarryForward"] is True
+
+    def test_confirmed_digits_by_end(self):
+        # secret = (3, 7, 1, 9); final guess contains 3 and 7 which are both in secret
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((0, 2, 4, 6), (0, 0, 4)),
+            ((3, 7, 0, 5), (0, 2, 2)),   # final guess; 3 and 7 are in secret
+        ]
+        result = compute_yellow_analysis(user_guesses, secret)
+        assert set(result["confirmedDigitsByEnd"]) == {3, 7}

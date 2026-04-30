@@ -165,6 +165,10 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
         g_pos = green_positions(user_guesses[i][0])
         if g_pos:
             for j in range(i + 1, n):
+                # Grace period: do not fire if green established in guess 1 and
+                # the drop occurs in guess 2 (i==0, j==1). Wait until guess 3+.
+                if i == 0 and j == 1:
+                    continue
                 later_guess = user_guesses[j][0]
                 for pos, digit in g_pos.items():
                     if later_guess[pos] != digit:
@@ -347,6 +351,184 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
     return None
 
 
+def compute_yellow_analysis(user_guesses: list, secret: tuple) -> dict:
+    """
+    Analyse the player's handling of yellow (correct digit, wrong position) feedback.
+
+    Returns a dict with statistics and a plain-English summary about how well the
+    player tracked and acted on yellow peg information throughout the game.
+    """
+    n = len(user_guesses)
+    secret_set = set(secret)
+
+    # Digits in a guess that are in the secret but at the wrong position
+    def yellow_digits(guess):
+        return {d for d in guess if d in secret_set and guess[list(guess).index(d)] != secret[list(guess).index(d)]}
+
+    # More precise: position-aware yellow digits
+    def yellow_digit_slot_map(guess):
+        """Return {digit: pos} for digits that are in secret but at wrong position."""
+        return {guess[pos]: pos for pos in range(4)
+                if guess[pos] in secret_set and guess[pos] != secret[pos]}
+
+    # earlyYellowGuesses: 1-indexed guess numbers (among first 3) with yellow pegs
+    early_yellow_guesses = [
+        i + 1
+        for i in range(min(3, n))
+        if user_guesses[i][1][1] > 0
+    ]
+
+    # totalYellowFeedback
+    total_yellow_feedback = sum(fb[1] for _, fb in user_guesses)
+
+    # droppedAfterYellow: for each guess i with yellows, check what yellow-confirmed
+    # digits were absent from guess i+1
+    dropped_after_yellow = []
+    for i in range(n - 1):
+        guess_i, fb_i = user_guesses[i]
+        if fb_i[1] == 0:
+            continue
+        yellow_confirmed = set(yellow_digit_slot_map(guess_i).keys())
+        next_guess = set(user_guesses[i + 1][0])
+        dropped = sorted(yellow_confirmed - next_guess)
+        if dropped:
+            dropped_after_yellow.append({
+                "guess": i + 1,
+                "digitsDropped": dropped,
+                "yellowPegsThatGuess": fb_i[1],
+            })
+
+    missed_carry_forward = len(dropped_after_yellow) > 0
+
+    # repeatedYellowTesting: same (digit, slot) appeared as yellow in more than one guess
+    yellow_seen: dict = {}
+    repeated_yellow_testing = False
+    for i, (guess, _) in enumerate(user_guesses):
+        for pos in range(4):
+            d = guess[pos]
+            if d in secret_set and d != secret[pos]:
+                key = (d, pos)
+                if key in yellow_seen:
+                    repeated_yellow_testing = True
+                    break
+                yellow_seen[key] = i
+        if repeated_yellow_testing:
+            break
+
+    # confirmedDigitsByEnd: digits in final guess that are in secret
+    final_guess = set(user_guesses[-1][0]) if n > 0 else set()
+    confirmed_digits_by_end = sorted(final_guess & secret_set)
+
+    wasted_guesses_on_yellow = len(dropped_after_yellow)
+
+    # summary
+    if missed_carry_forward and early_yellow_guesses:
+        early_str = ", ".join(str(g) for g in early_yellow_guesses)
+        summary = (
+            f"Player got yellow feedback in guess {early_str} but changed multiple "
+            f"digits in the next guess, making it harder to track which digits belonged "
+            f"in the code."
+        )
+    elif repeated_yellow_testing:
+        summary = "Player re-tested a yellow digit in the same slot it was already proven wrong."
+    else:
+        summary = "Player managed yellow feedback consistently across the game."
+
+    return {
+        "earlyYellowGuesses":    early_yellow_guesses,
+        "totalYellowFeedback":   total_yellow_feedback,
+        "droppedAfterYellow":    dropped_after_yellow,
+        "missedCarryForward":    missed_carry_forward,
+        "repeatedYellowTesting": repeated_yellow_testing,
+        "confirmedDigitsByEnd":  confirmed_digits_by_end,
+        "wastedGuessesOnYellow": wasted_guesses_on_yellow,
+        "summary":               summary,
+    }
+
+
+def compute_key_moments(user_guesses: list, secret: tuple) -> list:
+    """
+    Identify 2–3 significant moments in the player's game.
+
+    Returns a list of dicts each with keys: guess (1-indexed), action, pegChange.
+    Moments are selected by: always including guess 1, any guess where the total
+    peg count changed by 2+, and any guess where yellows appeared for the first time.
+    The list is capped at 3 entries.
+    """
+    n = len(user_guesses)
+    if n == 0:
+        return []
+
+    secret_set = set(secret)
+
+    def peg_total(fb):
+        return fb[0] + fb[1]
+
+    def format_peg_change(fb):
+        g, y, _ = fb
+        if g > 0 and y > 0:
+            return f"{g} green, {y} yellow"
+        if g > 0:
+            return f"{g} green"
+        return f"{y} yellow"
+
+    def derive_action(i):
+        """Derive a human-readable action description for guess i."""
+        guess_i = set(user_guesses[i][0])
+        fb_i = user_guesses[i][1]
+        if i == 0:
+            return "introduced new digits"
+        prev_guess = set(user_guesses[i - 1][0])
+        prev_fb = user_guesses[i - 1][1]
+        added = guess_i - prev_guess
+        removed = prev_guess - guess_i
+        prev_yellows = {d for d in user_guesses[i - 1][0]
+                        if d in secret_set and user_guesses[i - 1][0][list(user_guesses[i - 1][0]).index(d)] != secret[list(user_guesses[i - 1][0]).index(d)]}
+        yellow_confirmed = prev_yellows
+
+        if len(guess_i) == 4 and len(added) == 4:
+            return "changed all digits"
+        if prev_fb[1] > 0 and len(removed & yellow_confirmed) >= 2:
+            return "dropped multiple digits after yellow"
+        if prev_fb[1] > 0 and not (removed & yellow_confirmed):
+            return "kept all yellow candidates"
+        if fb_i[0] > prev_fb[0]:
+            return "locked in green digit"
+        if len(added) > 2:
+            return "introduced new digits"
+        return "introduced new digits"
+
+    moments = []
+    yellow_first_seen = False
+
+    for i in range(n):
+        fb_i = user_guesses[i][1]
+        is_first = (i == 0)
+        peg_change_big = False
+        yellow_first_now = False
+
+        if i > 0:
+            prev_total = peg_total(user_guesses[i - 1][1])
+            curr_total = peg_total(fb_i)
+            peg_change_big = abs(curr_total - prev_total) >= 2
+
+        if fb_i[1] > 0 and not yellow_first_seen:
+            yellow_first_now = True
+            yellow_first_seen = True
+
+        if is_first or peg_change_big or yellow_first_now:
+            moments.append({
+                "guess":     i + 1,
+                "action":    derive_action(i),
+                "pegChange": format_peg_change(fb_i),
+            })
+
+        if len(moments) >= 3:
+            break
+
+    return moments
+
+
 def build_llm_payload(user_path_stats: list, ai_full_path: list,
                       user_guesses=None, secret=None) -> dict:
     """
@@ -370,13 +552,19 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list,
 
     logic_flag      = None
     good_logic_flag = None
+    yellow_analysis = None
+    key_moments     = None
     if user_guesses is not None and secret is not None:
         logic_flag      = evaluate_logic_flags(user_guesses, secret)
         good_logic_flag = evaluate_good_logic_flags(user_guesses, secret)
+        yellow_analysis = compute_yellow_analysis(user_guesses, secret)
+        key_moments     = compute_key_moments(user_guesses, secret)
 
     return {
         "userStepCount":    user_steps,
         "perfectStepCount": perfect_steps,
         "goodLogicFlag":    good_logic_flag,
         "logicFlag":        logic_flag,
+        "yellowAnalysis":   yellow_analysis,
+        "keyMoments":       key_moments,
     }

@@ -133,6 +133,37 @@ def explain_step(step: int, guess: tuple, feedback: tuple,
     return f"**Guess {step} ({gs}):** {method} Result: {result} {space}"
 
 
+SEVERITY = {
+    "unforced_error_green":          "high",
+    "missed_proof":                  "high",
+    "false_negative":                "medium",
+    "false_anchor":                  "medium",
+    "repeated_slot":                 "medium",
+    "dropped_yellow":                "medium",
+    "dropped_too_many_after_yellow": "medium",
+    "insufficient_yellow_carry":     "low",
+}
+
+GOOD_SEVERITY = {
+    "smart_isolation": "high",
+    "efficient_pivot": "medium",
+    "perfect_lock":    "medium",
+}
+
+
+def _add_metadata(flag: dict, severity_map: dict) -> dict:
+    """Mutate flag dict in place to add 'severity' and 'phase', then return it."""
+    flag["severity"] = severity_map.get(flag["type"], "low")
+    tg = flag.get("trigger_guess", 1)
+    if tg <= 2:
+        flag["phase"] = "early"
+    elif tg <= 4:
+        flag["phase"] = "mid"
+    else:
+        flag["phase"] = "late"
+    return flag
+
+
 def evaluate_logic_flags(user_guesses: list, secret: tuple):
     """
     Analyse the player's guess history for logical errors.
@@ -172,11 +203,11 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
                 later_guess = user_guesses[j][0]
                 for pos, digit in g_pos.items():
                     if later_guess[pos] != digit:
-                        return {
+                        return _add_metadata({
                             "type": "unforced_error_green",
                             "digit_involved": digit,
                             "trigger_guess": j + 1,
-                        }
+                        }, SEVERITY)
 
     # ── Tier 1: missed_proof ─────────────────────────────────────────────────
     for i in range(1, n - 1):
@@ -200,12 +231,12 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
                         for m in range(i + 1, n):
                             if digit in set(user_guesses[m][0]):
                                 wasted.append(m + 1)
-                        return {
+                        return _add_metadata({
                             "type": "missed_proof",
                             "digit_involved": digit,
                             "trigger_guess": i + 1,
                             "wasted_guesses": wasted,
-                        }
+                        }, SEVERITY)
 
     # ── Tier 2: false_negative ───────────────────────────────────────────────
     for i in range(1, n - 1):
@@ -224,11 +255,11 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
                 dropped = added - next_set
                 if dropped:
                     digit = next(iter(dropped))
-                    return {
+                    return _add_metadata({
                         "type": "false_negative",
                         "digit_involved": digit,
                         "trigger_guess": i + 1,  # the confirming guess (where pegs went up)
-                    }
+                    }, SEVERITY)
 
     # ── Tier 2: false_anchor ─────────────────────────────────────────────────
     secret_set = set(secret)
@@ -245,12 +276,12 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
                 run_len += 1
                 if run_len >= 3:
                     wasted = list(range(run_start + 1, run_start + run_len + 1))
-                    return {
+                    return _add_metadata({
                         "type": "false_anchor",
                         "digit_involved": digit,
                         "trigger_guess": run_start + 1,
                         "wasted_guesses": wasted,
-                    }
+                    }, SEVERITY)
             else:
                 run_len = 0
                 run_start = None
@@ -263,11 +294,11 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
         for pos, digit in yw.items():
             key = (digit, pos)
             if key in yellow_seen:
-                return {
+                return _add_metadata({
                     "type": "repeated_slot",
                     "digit_involved": digit,
                     "trigger_guess": i + 1,
-                }
+                }, SEVERITY)
             else:
                 yellow_seen[key] = i
 
@@ -284,11 +315,51 @@ def evaluate_logic_flags(user_guesses: list, secret: tuple):
         next_set = set(next_guess)
         carried = confirmed_digits & next_set
         if len(carried) < len(confirmed_digits):
-            return {
+            return _add_metadata({
                 "type": "dropped_yellow",
                 "digit_involved": None,
                 "trigger_guess": i + 2,
-            }
+            }, SEVERITY)
+
+    # ── Tier 4: dropped_too_many_after_yellow ────────────────────────────────
+    for i in range(min(n - 1, 3)):  # only first 3 guesses
+        _, fb = user_guesses[i]
+        g, y, _ = fb
+        if y > 0:
+            curr_set = set(user_guesses[i][0])
+            next_set = set(user_guesses[i + 1][0])
+            changed = len(curr_set.symmetric_difference(next_set))
+            if changed >= 6:  # 3+ digits dropped and 3+ new ones added = 6 changes
+                return _add_metadata({
+                    "type": "dropped_too_many_after_yellow",
+                    "digit_involved": None,
+                    "trigger_guess": i + 2,
+                }, SEVERITY)
+
+    # ── Tier 4: insufficient_yellow_carry ────────────────────────────────────
+    # NOTE: insufficient_yellow_carry is unreachable in practice because
+    # yellow_confirmed ⊆ confirmed_digits for any guess. Whenever this
+    # condition would fire, dropped_yellow (Tier 3) has already returned.
+    # Kept per spec; a refactor that checks cumulative yellow carry before
+    # per-guess carry would unlock it.
+    cumulative_yellows = 0
+    for i in range(n - 1):
+        g, y, _ = user_guesses[i][1]
+        cumulative_yellows += y
+        if cumulative_yellows == 0:
+            continue
+        # yellow-confirmed digits from this guess: in secret but wrong position
+        yellow_confirmed = {user_guesses[i][0][pos] for pos in range(4)
+                            if user_guesses[i][0][pos] in secret_set
+                            and user_guesses[i][0][pos] != secret[pos]}
+        next_set = set(user_guesses[i + 1][0])
+        carried = yellow_confirmed & next_set
+        if len(carried) < cumulative_yellows and len(carried) < len(yellow_confirmed):
+            return _add_metadata({
+                "type": "insufficient_yellow_carry",
+                "digit_involved": None,
+                "trigger_guess": i + 2,
+            }, SEVERITY)
 
     return None
 
@@ -309,11 +380,11 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
             new_digits = curr_set - prev_set
             if new_digits and not (new_digits & all_used):
                 digit = min(carryover)
-                return {
+                return _add_metadata({
                     "type": "smart_isolation",
                     "digit_involved": digit,
                     "trigger_guess": i + 2,
-                }
+                }, GOOD_SEVERITY)
 
     # efficient_pivot: peg count drops when digit introduced; digit gone next guess
     for i in range(1, n - 1):
@@ -328,11 +399,11 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
             absent_from_secret = dropped_next - set(secret)
             if absent_from_secret:
                 digit = min(absent_from_secret)
-                return {
+                return _add_metadata({
                     "type": "efficient_pivot",
                     "digit_involved": digit,
                     "trigger_guess": i + 1,
-                }
+                }, GOOD_SEVERITY)
 
     # perfect_lock: green digit kept in same slot every subsequent guess
     def green_positions(guess):
@@ -342,11 +413,11 @@ def evaluate_good_logic_flags(user_guesses: list, secret: tuple):
         g_pos = green_positions(user_guesses[i][0])
         for pos, digit in g_pos.items():
             if all(user_guesses[j][0][pos] == digit for j in range(i + 1, n)):
-                return {
+                return _add_metadata({
                     "type": "perfect_lock",
                     "digit_involved": digit,
                     "trigger_guess": i + 1,
-                }
+                }, GOOD_SEVERITY)
 
     return None
 

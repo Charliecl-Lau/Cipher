@@ -1,7 +1,7 @@
 import pytest
 from cipher_engine import (
     build_llm_payload, evaluate_logic_flags, evaluate_good_logic_flags,
-    compute_yellow_analysis, compute_key_moments,
+    compute_yellow_analysis, compute_key_moments, SEVERITY,
 )
 
 
@@ -505,3 +505,157 @@ class TestKeyMoments:
         assert len(moments) == 1
         assert moments[0]["guess"] == 1
         assert moments[0]["pegChange"] == "0 pegs"
+
+
+class TestNewFlags:
+    def test_dropped_too_many_after_yellow(self):
+        # secret = (3, 7, 1, 9)
+        # To fire dropped_too_many_after_yellow without triggering any higher-tier flag:
+        #   - dropped_yellow (Tier 3): all confirmed digits must be carried.
+        #   - repeated_slot (Tier 3): same (digit, slot) must not appear as yellow twice.
+        #   - We need y>0 in guess 1, AND symmetric_difference >= 6 into guess 2.
+        #
+        # guess 1: (7, 0, 2, 4) — digit 7 at pos 0 is yellow (in secret at pos 1); y=1.
+        #   confirmed_digits = {7}.
+        # guess 2: (3, 7, 5, 6) — digit 3 at pos 0 is GREEN (secret[0]=3), digit 7 at pos 1
+        #   is GREEN (secret[1]=7). Carries digit 7. dropped_yellow: carried={7}=confirmed → OK.
+        #   Digit 7 is now GREEN (pos 1), not yellow at pos 0, so repeated_slot does NOT fire.
+        #   symmetric_diff of {7,0,2,4} and {3,7,5,6} = {0,2,4,3,5,6} → size 6 ≥ 6 → fires.
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 0, 2, 4), (0, 1, 3)),   # digit 7 yellow at pos 0 (y=1); confirmed_digits={7}
+            ((3, 7, 5, 6), (2, 0, 2)),   # digit 7 now green at pos 1; sym_diff=6 → fires
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert flag["type"] == "dropped_too_many_after_yellow"
+
+    def test_dropped_yellow_fires_before_insufficient_yellow_carry(self):
+        # This test verifies PRIORITY, not the insufficient_yellow_carry flag itself.
+        #
+        # insufficient_yellow_carry is logically unreachable: yellow_confirmed is always
+        # a subset of confirmed_digits, so whenever insufficient_yellow_carry's condition
+        # would be satisfied, at least one confirmed_digit is also uncarried, which
+        # causes dropped_yellow (Tier 3) to fire first and return early.
+        #
+        # The scenario below has y=2 in guess 1 (digits 7 and 3 confirmed yellow).
+        # Guess 2 carries 3 but not 7 — this looks like insufficient carry, but
+        # dropped_yellow fires first because confirmed_digits={7,3} and carried={3}.
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 3, 0, 5), (0, 2, 2)),   # 7 and 3 yellow (y=2); cumulative_yellows=2
+            ((3, 0, 4, 8), (0, 1, 3)),   # carries 3 but not 7; dropped_yellow fires first
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        # dropped_yellow fires first (confirmed_digits={7,3}, carried={3}, 1 < 2)
+        # insufficient_yellow_carry is preempted as designed
+        assert flag["type"] == "dropped_yellow"
+
+
+class TestFlagMetadata:
+    def test_logic_flag_has_severity_and_phase(self):
+        # Use the dropped_yellow scenario — any flag will do
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 3, 9, 1), (0, 4, 0)),   # all 4 confirmed
+            ((5, 6, 2, 8), (0, 0, 4)),   # drops all → dropped_yellow
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert "severity" in flag
+        assert "phase" in flag
+        assert flag["severity"] in ("high", "medium", "low")
+        assert flag["phase"] in ("early", "mid", "late")
+
+    def test_good_logic_flag_has_severity_and_phase(self):
+        # Use the smart_isolation scenario
+        secret = (1, 7, 8, 9)
+        guesses = [
+            ((0, 1, 2, 3), (0, 1, 3)),
+            ((1, 4, 5, 6), (0, 1, 3)),
+        ]
+        flag = evaluate_good_logic_flags(guesses, secret)
+        assert flag is not None
+        assert "severity" in flag
+        assert "phase" in flag
+        assert flag["severity"] in ("high", "medium", "low")
+        assert flag["phase"] in ("early", "mid", "late")
+
+    def test_early_phase_for_trigger_guess_1_or_2(self):
+        # false_anchor fires at trigger_guess=1 (run_start=0) → phase should be "early"
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((0, 1, 3, 7), (0, 3, 1)),
+            ((0, 3, 7, 1), (0, 3, 1)),
+            ((0, 7, 1, 3), (0, 3, 1)),
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert flag["trigger_guess"] <= 2
+        assert flag["phase"] == "early"
+
+    def test_mid_phase_for_trigger_guess_3_or_4(self):
+        # Construct a flag that fires at trigger_guess 3 or 4
+        # unforced_error_green: green in guess 1, dropped in guess 3 (trigger_guess=3) → "mid"
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((0, 3, 1, 5), (1, 1, 2)),   # digit 1 green at pos 2
+            ((0, 3, 4, 5), (0, 1, 3)),   # grace period
+            ((0, 3, 4, 8), (0, 1, 3)),   # still lacks digit 1 → trigger_guess=3
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert flag["trigger_guess"] == 3
+        assert flag["phase"] == "mid"
+
+    def test_severity_matches_expected_for_high_flag(self):
+        # unforced_error_green should have severity "high"
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((0, 3, 1, 5), (1, 1, 2)),
+            ((0, 3, 4, 5), (0, 1, 3)),
+            ((0, 3, 4, 8), (0, 1, 3)),
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert flag["type"] == "unforced_error_green"
+        assert flag["severity"] == "high"
+
+    def test_severity_matches_expected_for_good_flag(self):
+        # smart_isolation should have severity "high" in GOOD_SEVERITY
+        secret = (1, 7, 8, 9)
+        guesses = [
+            ((0, 1, 2, 3), (0, 1, 3)),
+            ((1, 4, 5, 6), (0, 1, 3)),
+        ]
+        flag = evaluate_good_logic_flags(guesses, secret)
+        assert flag is not None
+        assert flag["type"] == "smart_isolation"
+        assert flag["severity"] == "high"
+
+    def test_dropped_too_many_after_yellow_has_correct_metadata(self):
+        # Same scenario as TestNewFlags::test_dropped_too_many_after_yellow.
+        # Verifies that the flag carries the correct severity and phase values.
+        # trigger_guess is 2 (guess 2 is where the excessive change happens) → phase "early".
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((7, 0, 2, 4), (0, 1, 3)),   # digit 7 yellow at pos 0 (y=1)
+            ((3, 7, 5, 6), (2, 0, 2)),   # sym_diff=6 → dropped_too_many_after_yellow fires
+        ]
+        flag = evaluate_logic_flags(user_guesses, secret)
+        assert flag is not None
+        assert flag["type"] == "dropped_too_many_after_yellow"
+        assert flag["severity"] == "medium"
+        assert flag["trigger_guess"] == 2
+        assert flag["phase"] == "early"
+
+    def test_flag_severity_for_all_known_types(self):
+        # Verify that every flag type registered in SEVERITY maps to a valid severity level.
+        # This acts as a contract test: any new flag added to SEVERITY must use a known level.
+        valid_severities = {"high", "medium", "low"}
+        for flag_type, severity in SEVERITY.items():
+            assert severity in valid_severities, (
+                f"Flag '{flag_type}' has severity '{severity}', "
+                f"which is not one of {valid_severities}"
+            )

@@ -490,3 +490,18 @@ class TestYellowAnalysis:
         ]
         result = compute_yellow_analysis(user_guesses, secret)
         assert set(result["confirmedDigitsByEnd"]) == {3, 7}
+
+
+class TestKeyMoments:
+    def test_zero_peg_feedback_produces_zero_pegs_string(self):
+        # A guess that earns all-red feedback (g=0, y=0) must appear as "0 pegs"
+        # in the pegChange field, not "0 yellow".
+        # secret = (3, 7, 1, 9); guess 1 uses none of those digits → 0 pegs.
+        secret = (3, 7, 1, 9)
+        user_guesses = [
+            ((0, 2, 4, 6), (0, 0, 4)),   # 0 greens, 0 yellows — all red
+        ]
+        moments = compute_key_moments(user_guesses, secret)
+        assert len(moments) == 1
+        assert moments[0]["guess"] == 1
+        assert moments[0]["pegChange"] == "0 pegs"

@@ -361,10 +361,6 @@ def compute_yellow_analysis(user_guesses: list, secret: tuple) -> dict:
     n = len(user_guesses)
     secret_set = set(secret)
 
-    # Digits in a guess that are in the secret but at the wrong position
-    def yellow_digits(guess):
-        return {d for d in guess if d in secret_set and guess[list(guess).index(d)] != secret[list(guess).index(d)]}
-
     # More precise: position-aware yellow digits
     def yellow_digit_slot_map(guess):
         """Return {digit: pos} for digits that are in secret but at wrong position."""
@@ -425,9 +421,9 @@ def compute_yellow_analysis(user_guesses: list, secret: tuple) -> dict:
     if missed_carry_forward and early_yellow_guesses:
         early_str = ", ".join(str(g) for g in early_yellow_guesses)
         summary = (
-            f"Player got yellow feedback in guess {early_str} but changed multiple "
-            f"digits in the next guess, making it harder to track which digits belonged "
-            f"in the code."
+            f"Player got yellow feedback in guess {early_str} but dropped a "
+            f"yellow-confirmed digit in the next guess, making it harder to track "
+            f"which digits belonged in the code."
         )
     elif repeated_yellow_testing:
         summary = "Player re-tested a yellow digit in the same slot it was already proven wrong."
@@ -466,6 +462,8 @@ def compute_key_moments(user_guesses: list, secret: tuple) -> list:
 
     def format_peg_change(fb):
         g, y, _ = fb
+        if g == 0 and y == 0:
+            return "0 pegs"
         if g > 0 and y > 0:
             return f"{g} green, {y} yellow"
         if g > 0:
@@ -494,8 +492,6 @@ def compute_key_moments(user_guesses: list, secret: tuple) -> list:
             return "kept all yellow candidates"
         if fb_i[0] > prev_fb[0]:
             return "locked in green digit"
-        if len(added) > 2:
-            return "introduced new digits"
         return "introduced new digits"
 
     moments = []
@@ -545,7 +541,8 @@ def build_llm_payload(user_path_stats: list, ai_full_path: list,
         secret: optional tuple — the secret code.
 
     Returns:
-        dict with keys: userStepCount, perfectStepCount, goodLogicFlag, logicFlag.
+        dict with keys: userStepCount, perfectStepCount, goodLogicFlag, logicFlag,
+        yellowAnalysis, keyMoments.
     """
     user_steps    = len(user_path_stats)
     perfect_steps = len(ai_full_path)
